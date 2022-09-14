@@ -7,6 +7,7 @@ const arch_storage = @import("storage.zig");
 const reflection = @import("reflection.zig");
 const entities = @import("entityContainer.zig");
 const storage = @import("storage.zig");
+const Entites = entities.Entities;
 
 pub fn Builder(comptime components: anytype) type {
 
@@ -124,11 +125,13 @@ const Enemy = .{
 const quad = @import("quadtree.zig");
 const Quadtree = quad.Quadtree(storage.EntityID, 30, 8);
 
-const EnemySpatialQuery = struct {
-  result: Quadtree,
 
-  const Self = @This();
-  pub fn init(allocator: std.mem.Allocator, ecs: MyWorld.Entities, world: World) !Self {
+pub fn get(comptime Query: type, comptime Result: type) !Result {
+  var bytes = std.mem.asBytes();
+}
+
+const EnemySpatialQuery = struct {
+  pub fn setup(comptime T: type, ecs: *Entities(T), world: *World(T)) !Quadtree {
     var area = Area{
       .left = 0,
       .top = 0,
@@ -136,16 +139,16 @@ const EnemySpatialQuery = struct {
       .height = world.height
     };
 
+    var allocator = world.allocator;
+    const view = quad.Area.init(0, 0, world.width, world.heigth);
     var tree = Quadtree.init(allocator);
     var iterator = ecs.TypedIter(Entry).init(ecs);
     while (iterator.next()) | each | {
-      var item_area = Area.init(each.position[0], each.position[1], each.size[0], each.size[1]);
+      var item_area = quad.Area.init(each.position[0], each.position[1], each.size[0], each.size[1]);
       try tree.add(each.id, item_area);
     }
 
-    return Self{
-      .result = tree
-    };
+    return tree;
   }
 
   const Entry = struct {
