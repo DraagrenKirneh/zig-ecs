@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const TypeId = enum(usize) { _ };
+pub const TypeId = enum(usize) { _ };
 
 // typeId implementation by Felix "xq" Queißner
 pub fn typeId(comptime T: type) TypeId {
@@ -28,6 +28,29 @@ pub fn ToEnum(components: anytype) type {
           .Enum = .{
               .layout = .Auto,
               .tag_type = u32,
+              .fields = &tags,
+              .decls = &.{},
+              .is_exhaustive = true,
+          }
+      };
+      break :Blk @Type(type_info);
+  };
+}
+
+pub fn ToEnumFromNames(names: []const []const u8) type {
+  const Type = std.builtin.Type;
+  return Blk: {
+      var tags: [names.len] Type.EnumField = undefined;
+      inline for (names) |name, i| {
+          tags[i] = .{
+              .name = name,
+              .value = i,
+          };
+      }
+      const type_info = Type{ 
+          .Enum = .{
+              .layout = .Auto,
+              .tag_type = std.math.IntFittingRange(0, names.len - 1),
               .fields = &tags,
               .decls = &.{},
               .is_exhaustive = true,
@@ -188,4 +211,58 @@ pub fn NamedArgsTuple(comptime Function: type, names: []const []const u8) type {
             .fields = &argument_field_list,
         },
     });
+}
+
+fn contains(array: []const []const u8, item: []const u8) bool {
+    for (array) | each | {
+        if (std.mem.eql(u8, each, item)) return true;
+    }
+    return false;
+}
+
+pub fn ToEnumFromMethods(comptime T: type, comptime types: []const type) type {
+  const names = getDeclEnumNames(T, types);
+  return ToEnumFromNames(names);
+}
+
+pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const []const u8 {
+    comptime var names: []const []const u8 = &[_][]const u8{};
+    inline for (types) | each | {
+        const decls = getDeclsFn(each);
+        inline for (decls) | dcl | {
+            const fn_info = dcl.func;
+            if (fn_info.args.len != 2) continue;            
+            const argt_0 = fn_info.args[0].arg_type;
+            const argt_1 = fn_info.args[1].arg_type;
+            if (argt_0 == each and argt_1 == *T) {
+                if (!contains(names, dcl.name)) {
+                    names = names ++ &[_][]const u8{ dcl.name };
+                }
+            }
+        }
+    }
+    return names;
+}
+
+const Entry = struct {
+    name: []const u8,
+    func: std.builtin.Type.Fn,
+};
+
+fn getDeclsFn(comptime T: type) []const Entry {
+    comptime {
+        const decls = @typeInfo(T).Struct.decls;
+        var count = 0;
+        var array: [decls.len]Entry = undefined;
+        for (decls) |decl| {
+            if (!decl.is_pub) continue;
+            const field = @field(T, decl.name);
+            const info = @typeInfo(@TypeOf(field));
+            if (info == .Fn){
+                array[count] = Entry{ .name = decl.name, .func = info.Fn };
+                count += 1;
+            }            
+        }
+        return array[0..count];
+    }
 }
