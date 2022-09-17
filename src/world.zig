@@ -59,8 +59,7 @@ pub fn Systems(comptime T: type, comptime Globals: type, comptime systems: []con
           while (iter.next()) | value | {
             value.onUpdate();
           }
-        }
-    
+        }    
       }
     }
 
