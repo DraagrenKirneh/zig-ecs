@@ -33,50 +33,7 @@ const WorldState = struct {
   }
 };
 
-pub fn Systems(comptime T: type, comptime Globals: type, comptime systems: []const type) type {
-  return struct {
-    entities: *entities.Entities(T),
-    globals: *Globals,
-    const Self = @This();
-
-    pub fn init(entities: *Entities, globals: *Globals) Self {
-      return .{
-        .entities = entities,
-        .globals = Globals,
-      };
-    }
-
-    pub fn update(self: *Self) !void {
-      inline for (systems) | system | {
-        if(!@hasDecl(system, "onUpdate")) continue;
-        if(std.meta.fields(system).len <= 0) {
-          var obj = system{};
-          obj.onUpdate();
-        }
-        else {
-          const Iter = Entities.TypedIter(system);
-          var iter = Iter.init(self.entities);
-          while (iter.next()) | value | {
-            value.onUpdate();
-          }
-        }    
-      }
-    }
-
-    pub fn start(self: *Self) !void {
-      inline for (systems) | system | {
-        if(!@hasDecl(system, "onStart")) continue;
-        const Iter = Entities.TypedIter(system);
-        var iter = Iter.init(self.entities);
-        while (iter.next()) | value | {
-          value.onStart();
-        }
-      }
-    }
-  };
-}
-
-pub fn World(comptime components: anytype) type {
+pub fn World(comptime Context: type) type {
   return struct {    
     pub const Entities = entities.Entities(components);
     pub const ComponentTag = Entities.TagType;
@@ -130,18 +87,13 @@ pub fn get(comptime Query: type, comptime Result: type) !Result {
 }
 
 const EnemySpatialQuery = struct {
-  pub fn setup(comptime T: type, ecs: *Entities(T), world: *World(T)) !Quadtree {
-    var area = Area{
-      .left = 0,
-      .top = 0,
-      .width = world.width,
-      .height = world.height
-    };
+  pub const Return = Quadtree;
 
-    var allocator = world.allocator;
-    const view = quad.Area.init(0, 0, world.width, world.heigth);
+  pub fn setup(comptime Context: type, context: *Context) !Quadtree {
+    var allocator = context.allocator;
+    const view = Area.init(0, 0, world.width, world.heigth);
     var tree = Quadtree.init(allocator);
-    var iterator = ecs.TypedIter(Entry).init(ecs);
+    var iterator = context.getIterator(Entry);
     while (iterator.next()) | each | {
       var item_area = quad.Area.init(each.position[0], each.position[1], each.size[0], each.size[1]);
       try tree.add(each.id, item_area);

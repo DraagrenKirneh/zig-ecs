@@ -8,7 +8,7 @@ const reflection = @import("reflection.zig");
 
 const assert = std.debug.assert;
 
-const EntityID = arch_storage.EntityID;
+pub const EntityID = arch_storage.EntityID;
 //const ArchetypeStorage = storage.ArchetypeStorage;
 const void_archetype_hash = arch_storage.void_archetype_hash;
 
