@@ -81,11 +81,6 @@ const Enemy = .{
 const quad = @import("quadtree.zig");
 const Quadtree = quad.Quadtree(storage.EntityID, 30, 8);
 
-
-pub fn get(comptime Query: type, comptime Result: type) !Result {
-  var bytes = std.mem.asBytes();
-}
-
 const EnemySpatialQuery = struct {
   pub const Return = Quadtree;
 

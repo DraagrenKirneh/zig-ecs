@@ -10,7 +10,7 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
   return struct {
     context: *Context,
 
-    const Tags = reflection.ToEnumFromMethods(Context, systems);
+    const Operation = reflection.ToEnumFromMethods(Context, systems);
     const Self = @This();
 
     pub fn init(context: *Context) Self {
@@ -19,13 +19,12 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
       };
     }
 
-    pub fn run(self: Self, tag: Tags) !void {
+    pub fn run(self: Self, tag: Operation) !void {
       const declName = @tagName(tag);
       inline for (systems) | system | {
         if(!@hasDecl(system, declName)) continue;
         const field = @field(system, declName);
-        const Iter = Context.Entities.TypedIter(system);
-        var iter = Iter.init(self.context.entities);
+        var iter = self.context.getIterator(system);
         while (iter.next()) | value | {          
           @call(.{}, field, .{ value, self.context });
         }    
