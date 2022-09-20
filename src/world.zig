@@ -82,7 +82,7 @@ const quad = @import("quadtree.zig");
 const Quadtree = quad.Quadtree(storage.EntityID, 30, 8);
 
 const EnemySpatialQuery = struct {
-  pub const Return = Quadtree;
+  pub const ReturnType = Quadtree;
 
   pub fn setup(comptime Context: type, context: *Context) !Quadtree {
     var allocator = context.allocator;
@@ -105,16 +105,6 @@ const EnemySpatialQuery = struct {
 };
 
 const MyWorld = World(Components);
-
-const SpawnEnemy = struct {
-
-  const interval: f32 = 0;
-
-  pub fn onInterval(game: *Game, ecs: *MyWorld.Entities) !void {
-    //try ecs.create()
-  }
-
-};
 
 const MoveData = struct {
   location: f32,
