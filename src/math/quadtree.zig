@@ -6,38 +6,35 @@ const Area = rectangle.Rectangle;
 const Quadrant = rectangle.Quadrant;
 
 pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: usize) type {
-    const List = std.ArrayList(T);
-    const Map = std.AutoHashMap(T, Area);
+    const List = std.ArrayListUnmanaged(T);
+    const Map = std.AutoArrayHashMapUnmanaged(T, Area);
     const Allocator = std.mem.Allocator;
     return struct {
         allocator: Allocator,
         map: Map,
-        root: *Node,
+        root: Node,
         area: Area,
         
         const Self = @This();
 
         const Node = struct {
-            values: List,
+            values: List = .{},
             children: ?[4] *Node = null,
         };
 
-        pub fn init(allocator: std.mem.Allocator, area: Area) !Self {
-            var node = try allocator.create(Node);
-            node.values = try List.initCapacity(allocator, threshold);
-            node.children = null;
+        pub fn init(allocator: Allocator, area: Area) Self {
             return Self{
                 .area = area,
                 .allocator = allocator,                
-                .map = Map.init(allocator),
-                .root = node,
+                .map = .{},
+                .root = .{},
             };
         }
 
         pub fn add(self: *Self, value: T, area: Area) !void {
             var current_area = self.area;
             var depth: usize = 0;
-            var node: *Node = self.root; 
+            var node: *Node = &self.root; 
 
             while (depth < maxDepth) : (depth += 1) {
                 if(node.children == null) {
@@ -56,15 +53,15 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
                     break;                    
                 }                
             }            
-            try node.values.append(value);
-            try self.map.put(value, area);
+            try node.values.append(self.allocator, value);
+            try self.map.put(self.allocator, value, area);
         }
 
         pub fn query(self: *Self, area: Area, count: usize) ![]T {
             var values: List = try List.initCapacity(self.allocator, count);
 
-            self.queryNode(self.root, self.area, area, &values);
-            return values.toOwnedSlice();
+            self.queryNode(&self.root, self.area, area, &values);
+            return values.toOwnedSlice(self.allocator);
         }
 
         fn queryNode(self: *Self, node: *Node, scanArea: Area, queryArea: Area, list: *List) void {
@@ -89,8 +86,9 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
             var children: [4]*Node = undefined;
             for (children) | _, index | {
                 var new_node = try self.allocator.create(Node);
-                new_node.values = try List.initCapacity(self.allocator, threshold);
-                new_node.children = null;
+                new_node.* = .{};
+                //new_node.values = try List.initCapacity(self.allocator, threshold);
+                //new_node.children = null;
                 children[index] = new_node;
             }
             node.children = children;
@@ -118,7 +116,7 @@ test "basic add functionality" {
     const alloc = arena.allocator();
     std.debug.print("\n", .{ });
     const QTree = QuadTree(usize, 8, 30);
-    var tree = try QTree.init(alloc, Area.initBasic(0, 0, 900, 900));
+    var tree = QTree.init(alloc, Area.initBasic(0, 0, 900, 900));
     
     var ix: usize = 1;
     while (ix <= 50) : ( ix += 1) {

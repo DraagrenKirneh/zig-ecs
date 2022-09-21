@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Cache = @import("cache.zig").PointerCache;
+const typeId = @import("ecs.zig").typeId;
 
 pub fn Context(comptime State: type, comptime Entities: type) type {
     return struct {
@@ -22,16 +23,26 @@ pub fn Context(comptime State: type, comptime Entities: type) type {
             };
         }
 
-        pub fn getIterator(self: Self, comptime T: type) Entities.TypedIter(T) {
-            return Entities.TypedIter(T).init(self.entities);
+        pub fn Iterator(comptime T: type) type {
+            return EntitesType.TypedIter(T);
         }
 
-        pub fn getQuery(self: *Self, comptime Query: type, comptime Result: type) !*Result {
-            if (self.cache.get(Result)) | result | {
-                return result;
+        pub fn getIterator(self: *Self, comptime T: type) type {
+            const It = Iterator(T);
+            return It.init(self.entites);
+        }
+
+        pub fn getQuery(
+            self: *Self, 
+            comptime Key: type, 
+            comptime Value: type, 
+            comptime generateFn: fn (context: *Self) anyerror!*Value) 
+        !*Value {
+            if (self.cache.get(Key, Value)) | result | {
+                 return result;
             }
-            var result = try Query.setup(Self, self);
-            try self.cache.set(Query, Result, result);
+            var result = try generateFn(self);
+            try self.cache.set(Key, Value, result);
             return result;
         }
     };

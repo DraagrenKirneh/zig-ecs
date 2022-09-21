@@ -37,7 +37,7 @@ pub fn ToEnum(components: anytype) type {
   };
 }
 
-pub fn ToEnumFromNames(names: []const []const u8) type {
+pub fn ToEnumFromNames(comptime names: []const []const u8) type {
   const Type = std.builtin.Type;
   return Blk: {
       var tags: [names.len] Type.EnumField = undefined;

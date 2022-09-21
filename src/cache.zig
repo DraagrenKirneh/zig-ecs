@@ -18,8 +18,8 @@ pub const PointerCache = struct {
         self.map.deinit();
     }
 
-    pub fn get(self: * const Self, comptime T: type) ?*T {
-        var data = self.map.get(reflection.typeId(T));
+    pub fn get(self: * const Self, comptime Key: type, comptime T: type) ?*T {
+        var data = self.map.get(reflection.typeId(Key));
         if (data) | bytes | {            
             return @intToPtr(*T, bytes);
         }

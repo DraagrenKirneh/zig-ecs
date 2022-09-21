@@ -55,20 +55,20 @@ pub fn Entities(comptime TComponents: type) type {
         pub fn TypedIter(comptime T: type) type {
           const components = reflection.extract(T, TagType);
           return struct {
-                entities: *Self,
+                entities: *const Self,
                 archetype_index: usize = 0,
                 row_index: u32 = 0,
 
                 const Iterator = @This();              
 
-                pub fn init(entities: *Self) Iterator {
+                pub fn init(entities: *const Self) Iterator {
                   return .{
                     .entities = entities,
                   };
                 }
 
-                pub fn next(iter: *Iterator) ?T {
-                    const entities = iter.entities;
+                pub fn next(iter: *Iterator) ?T {                    
+                    const entities = iter.entities;                    
                     // If the archetype table we're looking at does not contain the components we're
                     // querying for, keep searching through tables until we find one that does.
                     var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
@@ -88,48 +88,6 @@ pub fn Entities(comptime TComponents: type) type {
             };
         }
 
-        pub fn Iter(comptime components: []const TagType) type {            
-           
-            return struct {
-                entities: *Self,
-                archetype_index: usize = 0,
-                row_index: u32 = 0,
-
-                const Iterator = @This();
-
-                pub const Entry = struct {
-                    entity: EntityID,
-                    entities: *Self,
-
-                    pub fn get(e: Entry, comptime T: type) ?T { 
-                        var et = e.entities;                   
-                        const ptr = et.entities.get(e.entity).?;
-                        var archetype = et.archetypeByID(e.entity);
-                        return archetype.getInto(ptr.row_index, T);
-                    }
-                };
-
-                pub fn next(iter: *Iterator) ?Entry {
-                    const entities = iter.entities;
-                    // If the archetype table we're looking at does not contain the components we're
-                    // querying for, keep searching through tables until we find one that does.
-                    var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
-                    while (!hasComponents(archetype, components) or iter.row_index >= archetype.len) {                        
-                        iter.archetype_index += 1;
-                        iter.row_index = 0;
-                        if (iter.archetype_index >= entities.archetypes.count()) {
-                            return null;
-                        }
-                        archetype = entities.archetypes.entries.get(iter.archetype_index).value;
-                    }
-                    
-                    const row_entity_id = archetype.get(iter.row_index, .id, EntityID).?;
-                    iter.row_index += 1;
-                    return Entry{ .entity = row_entity_id, .entities = iter.entities };
-                }
-            };
-        }
-
         fn hasComponents(storage: ArchetypeStorage, comptime components: []const TagType) bool {
             var archetype = storage;
             if (components.len == 0) return false;
@@ -139,8 +97,8 @@ pub fn Entities(comptime TComponents: type) type {
             return true;
         }
 
-        pub fn query(self: *Self, comptime components: []const TagType) Iter(components) {
-            return Iter(components){
+        pub fn getIterator(self: *Self, comptime T: type) TypedIter(T) {
+            return TypedIter(T){
                 .entities = self,
             };
         }
@@ -203,7 +161,7 @@ pub fn Entities(comptime TComponents: type) type {
             const Wrapper = reflection.StructWrapperWithId(EntityID, T);
 
             var hash = reflection.typehash(T);  //@fixme archtype hash of id
-            std.debug.print("\n[1]newhash: {}\n", .{ hash });
+            //std.debug.print("\n[1]newhash: {}\n", .{ hash });
             var archetype_entry = try self.archetypes.getOrPut(self.allocator, hash);
 
             const column_fields = @typeInfo(T).Struct.fields;
@@ -545,3 +503,45 @@ test "ecc" {
 fn expectEqualOf(comptime T: type, expected: T, actual: T) !void {
   return std.testing.expectEqual(expected, actual);
 }
+
+// pub fn Iter(comptime components: []const TagType) type {            
+    
+//     return struct {
+//         entities: *Self,
+//         archetype_index: usize = 0,
+//         row_index: u32 = 0,
+
+//         const Iterator = @This();
+
+//         pub const Entry = struct {
+//             entity: EntityID,
+//             entities: *Self,
+
+//             pub fn get(e: Entry, comptime T: type) ?T { 
+//                 var et = e.entities;                   
+//                 const ptr = et.entities.get(e.entity).?;
+//                 var archetype = et.archetypeByID(e.entity);
+//                 return archetype.getInto(ptr.row_index, T);
+//             }
+//         };
+
+//         pub fn next(iter: *Iterator) ?Entry {
+//             const entities = iter.entities;
+//             // If the archetype table we're looking at does not contain the components we're
+//             // querying for, keep searching through tables until we find one that does.
+//             var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+//             while (!hasComponents(archetype, components) or iter.row_index >= archetype.len) {                        
+//                 iter.archetype_index += 1;
+//                 iter.row_index = 0;
+//                 if (iter.archetype_index >= entities.archetypes.count()) {
+//                     return null;
+//                 }
+//                 archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+//             }
+            
+//             const row_entity_id = archetype.get(iter.row_index, .id, EntityID).?;
+//             iter.row_index += 1;
+//             return Entry{ .entity = row_entity_id, .entities = iter.entities };
+//         }
+//     };
+// }

@@ -18,23 +18,32 @@ pub fn World(comptime Context: type, comptime systems: []const type) type {
     state: State,
 
     const Self = @This();
+
     pub fn init(allocator: Allocator, state: State) !Self {
-      var entites = try Entites.init(allocator);
       return Self{
         .baseAllocator = allocator,
         .arena = ArenaAllocator.init(allocator),
         .state = state,
-        .entites = entites,
+        .entites = try Entites.init(allocator),        
       };
     }
 
-    pub fn startFrame(self: *Self) Pipeline {
-      var context = Context.init(self.arena.allocator(), &self.state, &self.entites);
-      return Pipeline.init(&context);
+    pub fn dump(self: *Self) void {
+      const cnt = self.entites.archetypes.count();
+      std.debug.print("\n dump --- {}\n", .{ cnt });
     }
 
-    pub fn endFrame(self: *Self) void {
+    pub fn deinit(self: *Self) void {
+      self.entites.deinit();
       self.arena.deinit();
+    }
+
+    pub fn createPipeline(self: *Self) !Pipeline {
+      self.arena.state.end_index = 0;
+      var alloc = self.arena.allocator();
+      var ctx = try alloc.create(Context);
+      ctx.* = Context.init(alloc, &self.state, &self.entites);
+      return Pipeline.init(ctx);
     }
   };
 }

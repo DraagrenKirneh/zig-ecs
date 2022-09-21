@@ -17,15 +17,43 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
       };
     }
 
+    pub fn init_c(context: Context) !Self {
+      var ctx = try context.allocator.create(Context);
+      ctx.* = context;
+      return Self{
+        .context = ctx
+      };
+    }
+
+    pub fn dump(self: *Self) void {
+      const cnt = self.context.entities.archetypes.count();
+      std.debug.print("\n dump pipe --- {}\n", .{ cnt });
+    }
+
     pub fn run(self: *Self, comptime tag: Operation) !void {
       const declName = @tagName(tag);
       inline for (systems) | system | {
         if(!@hasDecl(system, declName)) continue;
-        const field = @field(system, declName);
-        var iter = self.context.getIterator(system);
-        while (iter.next()) | value | {          
-          try @call(.{}, field, .{ value, self.context });
-        }    
+        // Need to do an custom call here or the inline for will make a copy of entites.
+        try self.exec(system, declName);    
+      }
+    }
+
+    fn Iterator(comptime system: type) type {
+      return Context.EntitesType.TypedIter(system);
+    }
+
+    pub noinline fn exec(self: *Self, comptime system: type, comptime declName: []const u8) !void {
+      const field = @field(system, declName);
+      //const info = @typeInfo(field);
+      //const Args = comptime std.meta.ArgsTuple(@TypeOf(field));
+      var iter = Iterator(system).init(self.context.entities);
+      
+      while (iter.next()) | value | {          
+        //var ctx = self.context;
+        //var args = Args{ .@"0" = value, .@"1" = self.context };
+        //std.debug.print("\n, {} \n", .{ args });
+        try @call(.{}, field, .{ value, self.context });
       }
     }
   };
