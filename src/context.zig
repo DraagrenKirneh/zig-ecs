@@ -23,13 +23,12 @@ pub fn Context(comptime State: type, comptime Entities: type) type {
             };
         }
 
-        pub fn Iterator(comptime T: type) type {
+        fn Iterator(comptime T: type) type {
             return EntitesType.TypedIter(T);
         }
 
-        pub fn getIterator(self: *Self, comptime T: type) type {
-            const It = Iterator(T);
-            return It.init(self.entites);
+        pub fn getIterator(self: *Self, comptime T: type) Iterator(T) {
+            return Iterator(T).init(self.entities);
         }
 
         pub fn getQuery(

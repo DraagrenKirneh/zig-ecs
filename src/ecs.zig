@@ -11,3 +11,7 @@ pub const World = @import("world.zig").World;
 pub const typeId = @import("storage.zig").typeId;
 
 pub const math = @import("math/math.zig");
+
+test {
+  @import("std").testing.refAllDecls(@This());
+}

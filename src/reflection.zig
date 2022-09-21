@@ -10,7 +10,7 @@ pub fn typeId(comptime T: type) TypeId {
     }.x));
 }
 
-pub fn ToEnum(components: anytype) type {
+pub fn ToEnum(comptime components: anytype) type {
   return Blk: {
       const fields = std.meta.fields(@TypeOf(components));
       var tags: [fields.len + 1] std.builtin.Type.EnumField = undefined;
@@ -92,7 +92,8 @@ pub fn extract(comptime ValueT: type, comptime TagType: type) []const TagType {
       const fields = std.meta.fields(ValueT);
       var tags: [fields.len] TagType = undefined;
       inline for (fields) |f, i| {
-        tags[i] = std.meta.stringToEnum(TagType, f.name).?;           
+        //tags[i] = comptime std.meta.stringToEnum(TagType, f.name).?;           
+        tags[i] = @field(TagType, f.name);
       }
       break :Blk tags[0..];
   };
@@ -130,19 +131,6 @@ pub fn typesToHolder(comptime types: []const type) type {
     });
 
 }
-
-// pub fn extractTag(comptime tagType: type, name: []const u8) ?@TypeOf(tagType) {
-//     return Blk : {
-//         const f = std.meta.stringToEnum
-//         const fields = std.meta.fields(tagType);
-//         inline for (fields) | field | {
-//             if (std.mem.eql(field.name, name)) {
-//                 break :Blk 
-//             }
-//         }
-//         break :Blk null;
-//     };
-// }
 
 pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) type {
     return blk: {
@@ -213,7 +201,7 @@ pub fn NamedArgsTuple(comptime Function: type, names: []const []const u8) type {
     });
 }
 
-fn contains(array: []const []const u8, item: []const u8) bool {
+fn contains(comptime array: []const []const u8, comptime item: []const u8) bool {
     for (array) | each | {
         if (std.mem.eql(u8, each, item)) return true;
     }

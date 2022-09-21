@@ -476,18 +476,18 @@ test "ecc" {
   //var Iter = MyStorage.Iter(&.{ .rotation });
   
   
-  var iter = b.query(&.{ .rotation });
+  var iter = b.getIterator(Result);
   var val = b.getComponent(e, .rotation);
   try std.testing.expect(val != null);
   try std.testing.expect(val.? == 42);
 
-  iter.next().?.get(Result).?.rotation.* = 123;
+  iter.next().?.rotation.* = 123;
   var val2 = b.getComponent(e2, .rotation).?;
   try std.testing.expectEqual(val2, 123);
 
-  var entry = iter.next().?.get(Entry);
+  var entry = iter.next();
   try std.testing.expect(entry != null);
-  try std.testing.expect(entry.?.rotation == 42);
+  try std.testing.expect(entry.?.rotation.* == 42);
  
   // //try std.testing.expect(iter.next().?.get(Entry).?.rotation == 42);
   try std.testing.expect(iter.next() == null);

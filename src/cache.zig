@@ -60,6 +60,7 @@ pub const ObjectCache = struct {
     }
 };
 
+const TestKey = struct{};
 const TestData = struct {
     f: f32,
     d: i32,
@@ -98,8 +99,8 @@ test "PtrCache" {
     data.d = 42;
     data.f = 32.2;
 
-    try cache.set(TestData, data);
-    var result = cache.get(TestData);
+    try cache.set(TestKey, TestData, data);
+    var result = cache.get(TestKey, TestData);
 
     try std.testing.expect(result != null);
     try std.testing.expectEqual(data.d, result.?.d);
