@@ -3,19 +3,18 @@ const mem = std.mem;
 const Allocator = mem.Allocator;
 const testing = std.testing;
 const builtin = @import("builtin");
-const arch_storage = @import("storage.zig");
 const reflection = @import("reflection.zig");
+const ecs = @import("ecs.zig");
 
 const assert = std.debug.assert;
 
-pub const EntityID = arch_storage.EntityID;
+const EntityID = ecs.EntityID;
 //const ArchetypeStorage = storage.ArchetypeStorage;
-const void_archetype_hash = arch_storage.void_archetype_hash;
+const void_archetype_hash = ecs.void_archetype_hash;
 
-const typeId = arch_storage.typeId;
+const typeId = ecs.typeId;
 
 pub fn Entities(comptime TComponents: type) type {
-    // TODO: validate all_components is a namespaced component set in the form we expect    
     return struct {
         allocator: Allocator,
 
@@ -33,7 +32,7 @@ pub fn Entities(comptime TComponents: type) type {
 
         const Self = @This();
         pub const TagType: type = std.meta.FieldEnum(TComponents);
-        const ArchetypeStorage = arch_storage.CreateArchetypeStorage(TagType);
+        const ArchetypeStorage = ecs.ArchetypeStorage(TagType);
         const Column = ArchetypeStorage.Column;
         /// Points to where an entity is stored, specifically in which archetype table and in which row
         /// of that table. That is, the entity's component values are stored at:
@@ -480,7 +479,7 @@ pub fn Entities(comptime TComponents: type) type {
 
 test "ecc" {
   const Game = struct {
-    id: arch_storage.EntityID,
+    id: ecs.EntityID,
     location: f32,
     name: []const u8,
     rotation: u32,

@@ -3,7 +3,7 @@ const std = @import("std");
 const testing = std.testing;
 const reflection = @import("reflection.zig");
 
-const PointerCache = struct {
+pub const PointerCache = struct {
     const Map = std.AutoArrayHashMap(reflection.TypeId, usize);
     map: Map,
 
@@ -26,12 +26,12 @@ const PointerCache = struct {
         return null;
     }
 
-    pub fn set(self: *Self, comptime T: type, value: *T) !void {
-        try self.map.put(reflection.typeId(T), @ptrToInt(value));
+    pub fn set(self: *Self, comptime Key: type, comptime T: type, value: *T) !void {
+        try self.map.put(reflection.typeId(Key), @ptrToInt(value));
     }
 };
 
-const ObjectCache = struct {
+pub const ObjectCache = struct {
      const Map = std.AutoArrayHashMap(reflection.TypeId, []u8);
      map: Map,
 

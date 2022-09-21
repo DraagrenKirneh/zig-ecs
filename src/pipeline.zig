@@ -1,12 +1,10 @@
 const std = @import("std");
 const storage = @import("storage.zig");
 const reflection = @import("reflection.zig");
-const ecs = @import("entityContainer.zig");
-
+const ecs = @import("ecs.zig");
 const testing = std.testing;
 
-pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
- 
+pub fn Pipeline(comptime Context: type, comptime systems: []const type) type { 
   return struct {
     context: *Context,
 
@@ -19,14 +17,14 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
       };
     }
 
-    pub fn run(self: Self, tag: Operation) !void {
+    pub fn run(self: *Self, comptime tag: Operation) !void {
       const declName = @tagName(tag);
       inline for (systems) | system | {
         if(!@hasDecl(system, declName)) continue;
         const field = @field(system, declName);
         var iter = self.context.getIterator(system);
         while (iter.next()) | value | {          
-          @call(.{}, field, .{ value, self.context });
+          try @call(.{}, field, .{ value, self.context });
         }    
       }
     }
@@ -46,10 +44,7 @@ test "Pipeline" {
     rotation: u32,
   };
 
-  const TestContext = struct {
-    pub const Entities = MyStorage;
-    entities: *MyStorage
-  };
+  const TestContext = ecs.Context(i32, MyStorage);
 
   const TestMethod = struct {
     rotation: *u32,
@@ -59,6 +54,11 @@ test "Pipeline" {
       _ = context;
       std.debug.print("\n\n ---- value is: {}\n", .{ self.rotation.* });
       self.rotation.* += 4;
+    }
+
+    pub fn draw(self: Self, context: *TestContext) void {
+      _ = context;
+      std.debug.print("\n\n ---- value is: {}\n", .{ self.rotation.* });
     }
   };
 
@@ -70,11 +70,13 @@ test "Pipeline" {
   var e = try b.new();
   try b.setComponent(e, .rotation, 42);
 
-  var ctx = TestContext{ .entities = &b };
+  var state: i32 = 43;
+  var ctx = TestContext.init(allocator, &state, &b);
   const Pipe = Pipeline(TestContext, &.{ TestMethod });
   
   var pipeline = Pipe.init(&ctx);
 
   try pipeline.run(.update);
   try pipeline.run(.update);
+  try pipeline.run(.draw);
 }

@@ -2,60 +2,64 @@ const std = @import("std");
 const Vec2f = @import("Vec2.zig").Vec2f;
 
 pub const Rectangle = struct {
-    left: f32,
-    top: f32,
-    width: f32,
-    height: f32,
-
+    position: Vec2f,
+    size: Vec2f,
+    
     const Self = @This();
 
-    pub fn init(left: f32, top: f32, width: f32, height: f32) Self {
+    pub fn initBasic(x: f32, y: f32, width: f32, height: f32) Self {
+        return init(.{ .x = x, .y = y }, .{ .x = width, .y = height });
+    }
+
+    pub fn init(position: Vec2f, size: Vec2f) Self {
         return .{
-            .left = left,
-            .top = top,
-            .width = width,
-            .height = height,
+            .position = position,
+            .size = size,
         };
     }
 
+    pub inline fn left(self: Self) f32 {
+        return self.position.x;
+    }
+
+    pub inline fn top(self: Self) f32 {
+        return self.position.y;
+    }
+
     pub inline fn right(self: Self) f32 {
-        return self.left + self.width;
+        return self.position.x + self.size.x;
     }
 
     pub inline fn bottom(self: Self) f32 {
-        return self.top + self.height;
+        return self.position.y + self.size.y;
     }
 
     pub inline fn getCenter(self: Self) Vec2f {
         return .{ .x = self.right() / 2, .y = self.bottom() / 2 };
     }
 
-    pub inline fn size(self: Self) Vec2f {
-        return .{ .x = self.width, .y = self.height };
-    }
-
     pub inline fn contains(self: Self, other: Self) bool {
-        return self.left <= other.left 
+        return self.left() <= other.left()
             and other.right() <= self.right()
-            and self.top <= other.top 
+            and self.top() <= other.top() 
             and other.bottom() <= other.bottom();
     }
 
     pub inline fn intersects(self: Self, other: Self) bool {
-        return ! (self.left >= other.right()
-            or self.right() <= other.left 
-            or self.top >= other.bottom()
-            or self.bottom() <= other.top);        
+        return ! (self.left() >= other.right()
+            or self.right() <= other.left() 
+            or self.top() >= other.bottom()
+            or self.bottom() <= other.top());        
     }
 
     pub inline fn computeArea(self: Self, quadrant: Quadrant) Self {
-        const halfWidth = self.width / 2;
-        const halfHeight = self.height / 2;
+        const halfWidth = self.size.x / 2;
+        const halfHeight = self.size.y / 2;
         return switch(quadrant) {
-            .North_West => Self.init(self.left,             self.top,               halfWidth, halfHeight),
-            .North_East => Self.init(self.left + halfWidth, self.top,               halfWidth, halfHeight),
-            .South_West => Self.init(self.left,             self.top + halfHeight,  halfWidth, halfHeight),
-            .South_East => Self.init(self.left + halfWidth, self.top + halfHeight,  halfWidth, halfHeight),
+            .North_West => Self.initBasic(self.left(),             self.top(),               halfWidth, halfHeight),
+            .North_East => Self.initBasic(self.left() + halfWidth, self.top(),               halfWidth, halfHeight),
+            .South_West => Self.initBasic(self.left(),             self.top() + halfHeight,  halfWidth, halfHeight),
+            .South_East => Self.initBasic(self.left() + halfWidth, self.top() + halfHeight,  halfWidth, halfHeight),
         };
     }
 
@@ -64,39 +68,39 @@ pub const Rectangle = struct {
         
         if (valueArea.right() < middle.x) {
             if (valueArea.bottom() < middle.y) return Quadrant.North_West;
-            if (valueArea.top >= middle.y) return Quadrant.South_West;
+            if (valueArea.top() >= middle.y) return Quadrant.South_West;
             return null;
         }
-        if (valueArea.left >= middle.x) {
+        if (valueArea.left() >= middle.x) {
             if (valueArea.bottom() < middle.y) return Quadrant.North_East;
-            if (valueArea.top >= middle.y) return Quadrant.South_East;
+            if (valueArea.top() >= middle.y) return Quadrant.South_East;
             return null;
         }
         return null;
     }
 };
 
-test "Area" {
-    const a = Area.init(0, 0, 100, 100);
-    var b = Area.init(10, 10, 10, 10);
+test "Rectangle" {
+    const a = Rectangle.initBasic(0, 0, 100, 100);
+    var b = Rectangle.initBasic(10, 10, 10, 10);
     
     try std.testing.expectEqual(a.getQuadrant(b), .North_West);
     try std.testing.expectEqual(b.getQuadrant(a), null);
 
-    b.left = 50;
+    b.position.x = 50;
     try std.testing.expectEqual(a.getQuadrant(b), .North_East);
     try std.testing.expectEqual(b.getQuadrant(a), null);
 
-    b.top = 50;
+    b.position.y = 50;
     try std.testing.expectEqual(a.getQuadrant(b), .South_East);
     try std.testing.expectEqual(b.getQuadrant(a), null);
 
-    b.left = 0;
+    b.position.x = 0;
     try std.testing.expectEqual(a.getQuadrant(b), .South_West);
     try std.testing.expectEqual(b.getQuadrant(a), null);
 
-    b.top = 45;
-    b.left = 45;
+    b.position.y = 45;
+    b.position.x = 45;
     try std.testing.expectEqual(a.getQuadrant(b), null);
 }
 

@@ -2,11 +2,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Cache = @import("cache.zig").PointerCache;
 
-fn returnType(comptime T: type) std.builtin.Type {
-    const field = @field(T, "setup");
-    return @typeInfo(@TypeOf(field));
-}
-
 pub fn Context(comptime State: type, comptime Entities: type) type {
     return struct {
         entities: *Entities,
@@ -15,7 +10,9 @@ pub fn Context(comptime State: type, comptime Entities: type) type {
         cache: Cache,
 
         const Self = @This();
-
+        pub const StateType = State;
+        pub const EntitesType = Entities;
+        
         pub fn init(allocator: Allocator, state: *State, entities: *Entities) Self {
             return .{
                 .allocator = allocator,
@@ -29,31 +26,13 @@ pub fn Context(comptime State: type, comptime Entities: type) type {
             return Entities.TypedIter(T).init(self.entities);
         }
 
-        pub fn getQuery(self: Self, comptime Query: type) !*@field(Query, "Return") {
-            //const ReturnType = @field(Query, "Return");
-            if (self.cache.get(Query)) | result | {
+        pub fn getQuery(self: *Self, comptime Query: type, comptime Result: type) !*Result {
+            if (self.cache.get(Result)) | result | {
                 return result;
             }
-            var result = try Query.setup(Self, &self);
-            try self.cache.set(Query, result);
+            var result = try Query.setup(Self, self);
+            try self.cache.set(Query, Result, result);
             return result;
         }
     };
-}
-
-const TFN = struct {
-    pub fn setup(comptime T: type, ctx: *T) Entry {
-        _ = ctx;
-        return .{ .x = 42 };
-    }
-
-    const Entry = struct {
-        x: 43
-    };
-};
-
-test "retval" {
-    const res = returnType(TFN);
-    std.debug.print("\n{}\n", .{ res.Fn.return_type });
-    //.Fn.return_type.?;
 }
