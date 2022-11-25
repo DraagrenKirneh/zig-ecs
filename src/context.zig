@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Cache = @import("cache.zig").PointerCache;
 const typeId = @import("ecs.zig").typeId;
+const EntityID = @import("ecs.zig").EntityID;
 
 pub fn Context(comptime State: type, comptime Entities: type) type {
     return struct {
@@ -9,6 +10,7 @@ pub fn Context(comptime State: type, comptime Entities: type) type {
         state: *State,
         allocator: Allocator,
         cache: Cache,
+        deadList: std.ArrayList(EntityID),
 
         const Self = @This();
         pub const StateType = State;
@@ -20,11 +22,22 @@ pub fn Context(comptime State: type, comptime Entities: type) type {
                 .state = state,
                 .entities = entities,
                 .cache = Cache.init(allocator),
+                .deadList = std.ArrayList(EntityID).init(allocator),
             };
         }
 
         fn Iterator(comptime T: type) type {
             return EntitesType.TypedIter(T);
+        }
+
+        pub fn kill(self: *Self, id: EntityID) !void {
+            try self.deadList.append(id);
+        }
+
+        pub fn cleanup(self: *Self) !void {
+            for (self.deadList.items) | each | {
+                try self.entities.remove(each);
+            }
         }
 
         pub fn getIterator(self: *Self, comptime T: type) Iterator(T) {

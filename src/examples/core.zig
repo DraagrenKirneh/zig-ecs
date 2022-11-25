@@ -7,12 +7,17 @@ pub const Game = struct {
   height: f32
 };
 
+pub const Id = ecs.EntityID;
+
 const Components = struct {
-  id: ecs.EntityID,
+  id: Id,
   position: math.Vec2f,
   size: math.Vec2f,
   velocity: f32,
+  health: f32,
+  target: Id,
 };
 
 pub const Entities = ecs.Entities(Components);
 pub const Context = ecs.Context(Game, Entities);
+

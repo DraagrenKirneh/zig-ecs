@@ -88,6 +88,17 @@ pub fn Entities(comptime TComponents: type) type {
             };
         }
 
+        pub fn getEntity(self: *const Self, comptime T: type, id: EntityID) ?T {
+            const optional_ptr = self.entities.get(id);
+            if (optional_ptr) | ptr | {
+                const archetype = self.archetypeByID(id);
+                const components = reflection.extract(T, TagType);
+                if (!archetype.hasComponents(components)) return null;
+                return archetype.getInto(ptr.row_index, T);
+            }
+            return null;
+        }
+
         fn hasComponents(storage: ArchetypeStorage, comptime components: []const TagType) bool {
             var archetype = storage;
             if (components.len == 0) return false;

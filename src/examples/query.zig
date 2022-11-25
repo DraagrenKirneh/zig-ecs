@@ -6,6 +6,31 @@ const core = @import("core.zig");
 
 const QuadTree = ecs.math.QuadTree(ecs.EntityID, 30, 8);
 
+const MonsterData = struct {
+  position: math.Vec2f,
+  health: f32,
+};
+
+const Projectile = struct {
+  id: core.Id,
+  position: *math.Vec2f,
+  target: core.Id,
+  done: *bool,
+
+  const Self = @This();
+
+  pub fn step(self: Self, context: *core.Context) !void {
+    var x = context.entities.getEntity(self.target, MonsterData);
+    if (x) | monster | {
+      if (monster.health >= 0) {
+        
+      }
+    } else {
+      try context.kill(self.id);
+    }
+  }
+};
+
 const Move = struct {
   position: math.Vec2f,
   size: math.Vec2f,
