@@ -33,6 +33,31 @@ pub const Vec2f = struct {
         };
     }
 
+    // unit vecotr
+    pub inline fn normalize(self: Self) Self {
+        const invmag: f32 = 1.0 / self.length();
+        return .{
+            .x = self.x * invmag,
+            .y = self.y * invmag,
+        };
+    }
+
+    //checkme
+    pub inline fn isNear(self: Self, other: Self, distance: f32) bool {
+        return distance < self.distance(other);
+    }
+
+    pub inline fn lerp(self: Self, other: Self, t: f32) Self {
+        return .{
+            .x = t * other.x + (1 - t) * self.x,
+            .y = t * other.y + (1 - t) * self.y,
+        };
+    }
+    
+    pub inline fn manhattan_length(self: Self) f32 {
+        return self.x + self.y;
+    }
+
     pub inline fn dot(self: Self, other: Self) f32 {
         return self.x * other.x + self.y * other.y;
     }
@@ -42,16 +67,20 @@ pub const Vec2f = struct {
     }
 
     pub inline fn angleTo(self: Self, other: Self) f32 {
-        const dx = other.x - self.x;
-        const dy = other.y - self.y;
+        const dox = other.x - self.x;
+        const doy = other.y - self.y;
         return math.atan2(f32, dy, dx);
+    }
+
+    pub inline fn perp_prod(self: Self, other: Self) f32 {
+        return self.x * other.y - other.x * self.y;
     }
 
     pub inline fn distance(self: Self, other: Self) f32 {
         return math.sqrt(f32, self.distanceSquearedTo(other));
     }
 
-    pub inline fn distanceSqueared(self: Self, other: Self) f32 {
+    pub inline fn distanceSquared(self: Self, other: Self) f32 {
         const dx = self.x - other.x;
         const dy = self.y - other.y;
         return dx * dx + dy * dy;
@@ -64,7 +93,5 @@ pub const Vec2f = struct {
         if (self.x > other.x) return .gt;
         return .eq;
     }
-
-
 
 };

@@ -14,17 +14,24 @@ const MonsterData = struct {
 const Projectile = struct {
   id: core.Id,
   position: *math.Vec2f,
+  velocity: f32,
   target: core.Id,
   done: *bool,
 
   const Self = @This();
 
   pub fn step(self: Self, context: *core.Context) !void {
-    var x = context.entities.getEntity(self.target, MonsterData);
+    const x = context.entities.getEntity(self.target, MonsterData);
     if (x) | monster | {
-      if (monster.health >= 0) {
-        
+      const length = self.position.length(monster.position);
+      const distance = self.velocity;
+      if (length <= distance) {
+        self.position.* = monster.position;
+        // spawn
       }
+      const t = distance / length;
+      self.position.* = self.position.lerp(monster.position, t);
+      
     } else {
       try context.kill(self.id);
     }
