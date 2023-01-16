@@ -25,7 +25,7 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
 
         var iter = self.context.getIterator(system);  
         while (iter.next()) | value | {     
-          try @call(.{}, field, .{ value, self.context });          
+          try @call(.auto, field, .{ value, self.context });          
         }  
       }
     }

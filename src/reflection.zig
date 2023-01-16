@@ -26,7 +26,6 @@ pub fn ToEnum(comptime components: anytype) type {
       }
       const type_info = std.builtin.Type{ 
           .Enum = .{
-              .layout = .Auto,
               .tag_type = u32,
               .fields = &tags,
               .decls = &.{},
@@ -49,7 +48,6 @@ pub fn ToEnumFromNames(comptime names: []const []const u8) type {
       }
       const type_info = Type{ 
           .Enum = .{
-              .layout = .Auto,
               .tag_type = std.math.IntFittingRange(0, names.len - 1),
               .fields = &tags,
               .decls = &.{},
@@ -115,7 +113,7 @@ pub fn typesToHolder(comptime types: []const type) type {
         const t_info_optional = std.builtin.TypeInfo { .Optional = .{ .child = t } };
         fields[index] = .{
             .name =  t.name,
-            .field_type = @Type(t_info_optional),
+            .type = @Type(t_info_optional),
             .default_value = null,
             .is_comptime = false,
             .alignment = if (@sizeOf(t) > 0) @alignOf(t) else 0,
@@ -138,7 +136,7 @@ pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) 
         var new_fields: [old_fields.len + 1] std.builtin.Type.StructField = undefined;
         new_fields[0] = .{
             .name = "id",
-            .field_type = idType,
+            .type = idType,
             .default_value = null,
             .is_comptime = false,
             .alignment = if (@sizeOf(idType) > 0) @alignOf(idType) else 0,
@@ -179,9 +177,9 @@ pub fn NamedArgsTuple(comptime Function: type, names: []const []const u8) type {
     if (function_info.is_var_args)
         @compileError("Cannot create ArgsTuple for variadic function");
 
-    var argument_field_list: [function_info.args.len]std.builtin.Type.StructField = undefined;
-    inline for (function_info.args) |arg, i| {
-        const T = arg.arg_type.?;
+    var argument_field_list: [function_info.params.len]std.builtin.Type.StructField = undefined;
+    inline for (function_info.params) |arg, i| {
+        const T = arg.type.?;
         argument_field_list[i] = .{
             .name = names[i],
             .field_type = T,
@@ -219,9 +217,9 @@ pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const 
         const decls = getDeclsFn(each);
         inline for (decls) | dcl | {
             const fn_info = dcl.func;
-            if (fn_info.args.len != 2) continue;            
-            const argt_0 = fn_info.args[0].arg_type;
-            const argt_1 = fn_info.args[1].arg_type;
+            if (fn_info.params.len != 2) continue;            
+            const argt_0 = fn_info.params[0].type;
+            const argt_1 = fn_info.params[1].type;
             if (argt_0 == each and argt_1 == *T) {
                 if (!contains(names, dcl.name)) {
                     names = names ++ &[_][]const u8{ dcl.name };

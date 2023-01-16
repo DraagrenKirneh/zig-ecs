@@ -116,8 +116,8 @@ pub fn ArchetypeStorage(comptime T: type) type {
     fn debugValidateRow(storage: *Self, row: anytype) void {
         inline for (std.meta.fields(@TypeOf(row))) |field, index| {
             const column = storage.columns[index];
-            if (typeId(field.field_type) != column.typeId) {
-              storage.dbg_panic(@typeName(field.field_type), @tagName(column.name));               
+            if (typeId(field.type) != column.typeId) {
+              storage.dbg_panic(@typeName(field.type), @tagName(column.name));               
             }
         }
     }
@@ -206,7 +206,7 @@ pub fn ArchetypeStorage(comptime T: type) type {
         const fields = std.meta.fields(@TypeOf(row));
         inline for (fields) |field | {
           const fieldTag = comptime std.meta.stringToEnum(T, field.name).?;
-          const ColumnType = field.field_type;
+          const ColumnType = field.type;
           if (@sizeOf(ColumnType) == 0) continue;
           for (storage.columns) |column| {
             if (column.name != fieldTag) continue;            
@@ -262,10 +262,10 @@ pub fn ArchetypeStorage(comptime T: type) type {
 
         var data: TValue = undefined;
         inline for (t_info.Struct.fields) | field | {
-            const f_info = @typeInfo(field.field_type); 
+            const f_info = @typeInfo(field.type); 
             const fieldTag = comptime std.meta.stringToEnum(T, field.name).?;
             const isPtr = f_info == .Pointer;
-            const ColumnType = if(!isPtr) field.field_type else f_info.Pointer.child;
+            const ColumnType = if(!isPtr) field.type else f_info.Pointer.child;
             for (storage.columns) |column| {                
                 if (column.name == fieldTag) {
                   const columnValues = @ptrCast([*]ColumnType, @alignCast(@alignOf(ColumnType), &storage.block[column.offset]));
