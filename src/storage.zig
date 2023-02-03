@@ -110,6 +110,9 @@ pub fn ArchetypeStorage(comptime T: type) type {
   
 
     pub fn deinit(storage: *Self) void {
+        if (storage.capacity > 0){
+            storage.allocator.free(storage.block);
+        }
         storage.allocator.free(storage.columns);
     }
 

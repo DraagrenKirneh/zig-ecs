@@ -136,11 +136,7 @@ pub fn Entities(comptime TComponents: type) type {
             self.entities.deinit(self.allocator);
 
             var iter = self.archetypes.iterator();
-            while (iter.next()) |entry| {
-                // @Segfault fixme
-                //if (entry.value_ptr.hash != void_archetype_hash) {
-                  self.allocator.free(entry.value_ptr.block);
-                //}                
+            while (iter.next()) |entry| {           
                 entry.value_ptr.deinit();
             }
             self.archetypes.deinit(self.allocator);

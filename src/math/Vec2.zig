@@ -8,7 +8,6 @@ pub fn Vec2(comptime T: type) type {
     };
 }
 
-//pub const Vec2f = Vec2(f32);
 pub const Vec2i = Vec2(i32);
 
 pub const Vec2f = struct {
@@ -17,8 +16,12 @@ pub const Vec2f = struct {
 
     const Self = @This();
 
+    pub fn at(x: f32, y: f32) Self {
+        return .{ .x = x, .y = y };
+    }
+
     pub inline fn length(self: Self) f32 {
-        return math.sqrt(f32, self.x * self.x + self.y * self.y);
+        return math.sqrt(self.x * self.x + self.y * self.y);
     }
 
     pub inline fn theta(self: Self) f32 {
@@ -33,7 +36,6 @@ pub const Vec2f = struct {
         };
     }
 
-    // unit vecotr
     pub inline fn normalize(self: Self) Self {
         const invmag: f32 = 1.0 / self.length();
         return .{
@@ -77,7 +79,7 @@ pub const Vec2f = struct {
     }
 
     pub inline fn distance(self: Self, other: Self) f32 {
-        return math.sqrt(f32, self.distanceSquearedTo(other));
+        return math.sqrt(self.distanceSquared(other));
     }
 
     pub inline fn distanceSquared(self: Self, other: Self) f32 {
@@ -93,5 +95,29 @@ pub const Vec2f = struct {
         if (self.x > other.x) return .gt;
         return .eq;
     }
-
 };
+
+fn expectEqual(comptime T: type, expected: T, actual: T) !void {
+    return std.testing.expectEqual(expected, actual);
+}
+
+test "at" {
+    var p = Vec2f.at(1, 2);
+    try expectEqual(f32, 1, p.x);
+    try expectEqual(f32, 2, p.y);
+}
+
+test "unit" {
+    var p = Vec2f.at(1, 2);
+    var unit = p.unit();
+
+    try std.testing.expect(p.x != unit.x);
+}
+
+test "length" {
+    var p1 = Vec2f.at(10, 10);
+    var p2 = Vec2f.at(10, 20);
+
+    var len = p1.distance(p2);
+    try std.testing.expect(len == 10);
+}
