@@ -15,7 +15,10 @@ const Components = struct {
   size: math.Vec2f,
   velocity: f32,
   health: f32,
-  target: Id,
+  targetId: Id,
+  towerId: Id,
+  damage: f32,
+  cooldown: i32,
 };
 
 pub const Entities = ecs.Entities(Components);

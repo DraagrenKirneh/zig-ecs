@@ -6,32 +6,101 @@ const core = @import("core.zig");
 
 const QuadTree = ecs.math.QuadTree(ecs.EntityID, 30, 8);
 
-const MonsterData = struct {
-  position: math.Vec2f,
-  health: f32,
-};
+// tower -> projectile -> attack -> monster
 
-const Projectile = struct {
+// const Tower = struct {
+//   id: core.Id,
+//   position: math.Vec2f,
+//   size: math.Vec2f,
+//   range: f32,
+//   damage: f32,
+// }
+
+const EntityId = core.Id,
+
+const TextureTag = enum {},
+
+const DrawController = struct {
+  position: math.Vec2f,
+  size: math.Vec2f,
+  texture: TextureTag,
+
+  pub fn draw(self: Self, context: *core.Context) !void {
+    
+  }
+}
+
+const TowerController = struct {
+  id: EntityId,
+  position: math.Vec2f,
+  range: f32,
+  cooldown: *f32,
+
+  const ProjectileEntity = struct {
+    position: math.Vec2f,
+    velocity: f32,
+    targetId: core.Id,
+    towerId: core.Id
+  };
+
+  pub fn step(self: Self, context: *core.Context) !void {
+    if (cooldown != 0) return;
+    const tree = try context.getQuery(SpatialQuery, QuadTree, SpatialQuery.generate);
+    const halfRange = range / 2.0;
+    const halfVec2f = math.Vec2f.init(halfRange, halfRange);
+    const area = math.Rectangle.init(
+      self.position.sub(halfVec2f),
+      self.position.add(halfVec2f),
+    );
+    const entries = try tree.query(area, 1);
+    if (entries.len > 0) {
+      try context.createEntity(ProjectileEntity, .{
+        .position = self.position,
+        .velocity = 10,
+        .targetId = entries[0].id,
+        .towerId = self.id,
+      });
+      self.cooldown = 1000;
+    }
+    else {
+      self.cooldown = std.math.max(0, self.cooldown - 100);
+    }
+  }
+}
+
+const ProjectileController = struct {
   id: core.Id,
   position: *math.Vec2f,
   velocity: f32,
-  target: core.Id,
-  done: *bool,
+  targetId: core.Id,
+  towerId: core.Id,
 
   const Self = @This();
 
+  const TowerEntity = struct {
+    damage: f32,
+  }
+
+  const MonsterEntity = struct {
+    position: math.Vec2f,
+    health: *f32,
+  }
+
   pub fn step(self: Self, context: *core.Context) !void {
-    const x = context.entities.getEntity(self.target, MonsterData);
-    if (x) | monster | {
+    const opt_monster = context.entities.getEntity(self.targetId, MonsterEntity);
+    if (opt_monster) | monster | {
       const length = self.position.length(monster.position);
       const distance = self.velocity;
       if (length <= distance) {
         self.position.* = monster.position;
-        // spawn
+        const opt_tower = context.entites.getEntity(self.towerId, Tower);
+        if (opt_tower) | tower | {
+          monster.health = monster.health - tower.damage;
+        }
+        try context.kill(self.id);
       }
       const t = distance / length;
       self.position.* = self.position.lerp(monster.position, t);
-      
     } else {
       try context.kill(self.id);
     }

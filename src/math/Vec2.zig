@@ -17,12 +17,33 @@ pub const Vec2f = struct {
 
     const Self = @This();
 
+    pub fn init(x: f32, y: f32) Self {
+        return .{
+            .x = x,
+            .y = y,
+        };
+    }
+
+    pub inline fn sub(self: Self, other: Self) Self {
+        return .{
+            .x = self.x - other.x,
+            .y = self.y - other.y
+        };
+    }
+
+    pub inline fn add(self: Self, other: Self) Self {
+        return .{
+            .x = self.x + other.x,
+            .y = self.y + other.y
+        }; 
+    }
+
     pub inline fn length(self: Self) f32 {
         return math.sqrt(f32, self.x * self.x + self.y * self.y);
     }
 
     pub inline fn theta(self: Self) f32 {
-        return math.atan2(f32, y, x);
+        return math.atan2(f32, self.y, self.x);
     }
 
     pub inline fn unit(self: Self) Self {
@@ -43,8 +64,8 @@ pub const Vec2f = struct {
     }
 
     //checkme
-    pub inline fn isNear(self: Self, other: Self, distance: f32) bool {
-        return distance < self.distance(other);
+    pub inline fn isNear(self: Self, other: Self, radius: f32) bool {
+        return radius >= self.distance(other);
     }
 
     pub inline fn lerp(self: Self, other: Self, t: f32) Self {
@@ -69,7 +90,7 @@ pub const Vec2f = struct {
     pub inline fn angleTo(self: Self, other: Self) f32 {
         const dox = other.x - self.x;
         const doy = other.y - self.y;
-        return math.atan2(f32, dy, dx);
+        return math.atan2(f32, doy, dox);
     }
 
     pub inline fn perp_prod(self: Self, other: Self) f32 {
