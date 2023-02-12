@@ -136,11 +136,7 @@ pub fn Entities(comptime TComponents: type) type {
             self.entities.deinit(self.allocator);
 
             var iter = self.archetypes.iterator();
-            while (iter.next()) |entry| {
-                // @Segfault fixme
-                //if (entry.value_ptr.hash != void_archetype_hash) {
-                  self.allocator.free(entry.value_ptr.block);
-                //}                
+            while (iter.next()) |entry| {           
                 entry.value_ptr.deinit();
             }
             self.archetypes.deinit(self.allocator);
@@ -185,7 +181,7 @@ pub fn Entities(comptime TComponents: type) type {
                 inline for (column_fields) | field, index | {
                     // fixme panic test
                     const name = comptime if (std.meta.stringToEnum(TagType, field.name)) |name| name else @compileError("invalid field name");
-                    columns[index + 1] = Column.init(name, field.field_type);    
+                    columns[index + 1] = Column.init(name, field.type);    
                 }
 
                 std.sort.sort(Column, columns, {}, by_alignment_name);
@@ -251,7 +247,7 @@ pub fn Entities(comptime TComponents: type) type {
             self: *Self,
             entity: EntityID,
             comptime name: TagType,
-            component: std.meta.fieldInfo(TComponents, name).field_type,
+            component: std.meta.fieldInfo(TComponents, name).type,
         ) !void {
             var archetype = self.archetypeByID(entity);
                 
@@ -340,8 +336,8 @@ pub fn Entities(comptime TComponents: type) type {
             self: *Self,
             entity: EntityID,
             comptime name: TagType,
-        ) ? std.meta.fieldInfo(TComponents, name).field_type {
-          const Component = comptime std.meta.fieldInfo(TComponents, name).field_type;
+        ) ? std.meta.fieldInfo(TComponents, name).type {
+          const Component = comptime std.meta.fieldInfo(TComponents, name).type;
           var archetype = self.archetypeByID(entity);
 
           const ptr = self.entities.get(entity).?;

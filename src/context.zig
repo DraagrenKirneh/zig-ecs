@@ -4,22 +4,22 @@ const Cache = @import("cache.zig").PointerCache;
 const typeId = @import("ecs.zig").typeId;
 const EntityID = @import("ecs.zig").EntityID;
 
-pub fn Context(comptime State: type, comptime Entities: type) type {
+pub fn Context(comptime Resources: type, comptime Entities: type) type {
     return struct {
         entities: *Entities,
-        state: *State,
+        resources: *Resources,
         allocator: Allocator,
         cache: Cache,
         deadList: std.ArrayList(EntityID),
 
         const Self = @This();
-        pub const StateType = State;
+        pub const StateType = Resources;
         pub const EntitesType = Entities;
         
-        pub fn init(allocator: Allocator, state: *State, entities: *Entities) Self {
+        pub fn init(allocator: Allocator, resources: *Resources, entities: *Entities) Self {
             return .{
                 .allocator = allocator,
-                .state = state,
+                .resources = resources,
                 .entities = entities,
                 .cache = Cache.init(allocator),
                 .deadList = std.ArrayList(EntityID).init(allocator),

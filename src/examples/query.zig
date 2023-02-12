@@ -122,6 +122,7 @@ const Move = struct {
   }
 };
 
+
 const Monster = struct {
   position: math.Vec2f,
   size: math.Vec2f,

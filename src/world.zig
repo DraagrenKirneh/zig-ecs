@@ -8,7 +8,6 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 pub fn World(comptime Context: type, comptime systems: []const type) type {
-  const Pipeline = ecs.Pipeline(Context, systems);
   const State = Context.StateType;
   const Entites = Context.EntitesType;
   return struct {
@@ -18,6 +17,7 @@ pub fn World(comptime Context: type, comptime systems: []const type) type {
     state: State,
 
     const Self = @This();
+    const Pipeline = ecs.Pipeline(Context, systems);
 
     pub fn init(allocator: Allocator, state: State) !Self {
       return Self{
