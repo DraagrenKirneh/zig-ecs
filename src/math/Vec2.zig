@@ -23,6 +23,10 @@ pub const Vec2f = struct {
         };
     }
 
+    pub inline isInRadius(self: Self, other: Self, radius: f32) bool {
+        return self.distanceSquared(other) < radius * radius;
+    }
+
     pub inline fn sub(self: Self, other: Self) Self {
         return .{
             .x = self.x - other.x,
@@ -35,6 +39,20 @@ pub const Vec2f = struct {
             .x = self.x + other.x,
             .y = self.y + other.y
         }; 
+    }
+
+    pub fn move(self: Self, target: Self, speed: f32) Self {
+        const distx = target.x - self.x;
+	    const disty = target.y - self.y;
+	    const angle = math.atan2(f32, disty, distx);
+
+        return .{
+            .x = self.x + (speed * math.cos(f32, angle)),
+            .y = self.y + (speed * math.sin(f32, angle))
+        }
+
+	    // check for next point
+	    //return (distx < 0 ? -distx : distx) + (disty < 0 ? -disty : disty) < 2;
     }
     
     pub fn at(x: f32, y: f32) Self {
