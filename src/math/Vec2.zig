@@ -1,6 +1,10 @@
 const std = @import("std");
 const math = std.math;
 
+// https://github.com/thegeekyasian/geo-assist/blob/master/src/main/java/com/thegeekyasian/geoassist/kdtree/KDTree.java
+// https://github.com/tkazec/canvas-td/blob/master/scripts/game.js
+// https://github.com/Rion5/2D-TowerDefense/tree/master/Assets/Scripts/Tower
+
 pub fn Vec2(comptime T: type) type {
     return struct {
         x: T,
