@@ -16,9 +16,9 @@ const QuadTree = ecs.math.QuadTree(ecs.EntityID, 30, 8);
 //   damage: f32,
 // }
 
-const EntityId = core.Id,
+const EntityId = core.Id;
 
-const TextureTag = enum {},
+const TextureTag = enum {};
 
 const DrawController = struct {
   position: math.Vec2f,
@@ -28,7 +28,7 @@ const DrawController = struct {
   pub fn draw(self: Self, context: *core.Context) !void {
     
   }
-}
+};
 
 const TowerController = struct {
   id: EntityId,
@@ -66,7 +66,7 @@ const TowerController = struct {
       self.cooldown = std.math.max(0, self.cooldown - 100);
     }
   }
-}
+};
 
 const ProjectileController = struct {
   id: core.Id,
@@ -79,12 +79,12 @@ const ProjectileController = struct {
 
   const TowerEntity = struct {
     damage: f32,
-  }
+  };
 
   const MonsterEntity = struct {
     position: math.Vec2f,
     health: *f32,
-  }
+  };
 
   pub fn step(self: Self, context: *core.Context) !void {
     const opt_monster = context.entities.getEntity(self.targetId, MonsterEntity);

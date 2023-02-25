@@ -27,7 +27,7 @@ pub const Vec2f = struct {
         };
     }
 
-    pub inline isInRadius(self: Self, other: Self, radius: f32) bool {
+    pub inline fn isInRadius(self: Self, other: Self, radius: f32) bool {
         return self.distanceSquared(other) < radius * radius;
     }
 
@@ -53,7 +53,7 @@ pub const Vec2f = struct {
         return .{
             .x = self.x + (speed * math.cos(f32, angle)),
             .y = self.y + (speed * math.sin(f32, angle))
-        }
+        };
 
 	    // check for next point
 	    //return (distx < 0 ? -distx : distx) + (disty < 0 ? -disty : disty) < 2;
