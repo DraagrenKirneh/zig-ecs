@@ -73,7 +73,7 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
                 }
             }
             if (node.children) | children | {
-                for (children) | child, index | {
+                for (children, 0..) | child, index | {
                     var new_area = scanArea.computeArea(@intToEnum(Quadrant, index));
                     if (queryArea.intersects(new_area)) {
                         self.queryNode(child, new_area, queryArea, list);
@@ -84,7 +84,7 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
 
         fn split(self: *Self, node: *Node, area: Area) !void {
             var children: [4]*Node = undefined;
-            for (children) | _, index | {
+            for (0..children.len) | index | {
                 var new_node = try self.allocator.create(Node);
                 new_node.* = .{};
                 //new_node.values = try List.initCapacity(self.allocator, threshold);

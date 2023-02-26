@@ -18,7 +18,7 @@ pub fn ToEnum(comptime components: anytype) type {
         .name = "id",
         .value = 0
       };
-      inline for (fields) |f, i| {
+      inline for (fields, 0..) |f, i| {
           tags[i + 1] = .{
               .name = f.name,
               .value = i + 1,
@@ -40,7 +40,7 @@ pub fn ToEnumFromNames(comptime names: []const []const u8) type {
   const Type = std.builtin.Type;
   return Blk: {
       var tags: [names.len] Type.EnumField = undefined;
-      inline for (names) |name, i| {
+      inline for (names, 0..) |name, i| {
           tags[i] = .{
               .name = name,
               .value = i,
@@ -66,7 +66,7 @@ pub fn EnumFromType(comptime T: type) type {
         .name = "id",
         .value = 0
       };
-      inline for (fields) |f, i| {
+      inline for (fields, 0..) |f, i| {
           tags[i + 1] = .{
               .name = f.name,
               .value = i + 1,
@@ -89,7 +89,7 @@ pub fn extract(comptime ValueT: type, comptime TagType: type) []const TagType {
     return Blk: {
       const fields = std.meta.fields(ValueT);
       var tags: [fields.len] TagType = undefined;
-      inline for (fields) |f, i| {
+      inline for (fields, 0..) |f, i| {
         //tags[i] = comptime std.meta.stringToEnum(TagType, f.name).?;           
         tags[i] = @field(TagType, f.name);
       }
@@ -100,7 +100,7 @@ pub fn extract(comptime ValueT: type, comptime TagType: type) []const TagType {
 pub fn tagsToString(comptime T: type, comptime tags: []const T) []const []const u8 {
     return blk: {
         var array: [tags.len] []const u8 = undefined;
-        inline for (tags) | t, i | {
+        inline for (tags, 0..) | t, i | {
             array[i] = @tagName(t);
         }
         break :blk array[0..];
@@ -109,7 +109,7 @@ pub fn tagsToString(comptime T: type, comptime tags: []const T) []const []const 
 
 pub fn typesToHolder(comptime types: []const type) type {
     var fields: [types.len] std.builtin.Type.StructField = undefined;
-    inline for (types) | t, index | {
+    inline for (types, 0..) | t, index | {
         //const t_info_optional = std.builtin.TypeInfo { .Optional = .{ .child = t } };
         fields[index] = .{
             .name =  t.name,
@@ -141,7 +141,7 @@ pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) 
             .is_comptime = false,
             .alignment = if (@sizeOf(idType) > 0) @alignOf(idType) else 0,
         };
-        inline for (old_fields) | old_field, index | {
+        inline for (old_fields, 0..) | old_field, index | {
             new_fields[index + 1] = old_field;
         }   
         const type_info = std.builtin.Type{
@@ -178,7 +178,7 @@ pub fn NamedArgsTuple(comptime Function: type, names: []const []const u8) type {
         @compileError("Cannot create ArgsTuple for variadic function");
 
     var argument_field_list: [function_info.params.len]std.builtin.Type.StructField = undefined;
-    inline for (function_info.params) |arg, i| {
+    inline for (function_info.params, 0..) |arg, i| {
         const T = arg.type.?;
         argument_field_list[i] = .{
             .name = names[i],

@@ -30,7 +30,7 @@ pub fn buildTests(
     target: std.zig.CrossTarget,
 ) *std.Build.CompileStep {
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = thisDir() ++ "/src/main.zig" },
+        .root_source_file = .{ .path = thisDir() ++ "/src/ecs.zig" },
         .target = target,
         .optimize = optimize,
     });

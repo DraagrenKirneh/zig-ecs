@@ -178,7 +178,7 @@ pub fn Entities(comptime TComponents: type) type {
                     return err;
                 };
                 columns[0] = Column.init(.id, EntityID);
-                inline for (column_fields) | field, index | {
+                inline for (column_fields, 0..) | field, index | {
                     // fixme panic test
                     const name = comptime if (std.meta.stringToEnum(TagType, field.name)) |name| name else @compileError("invalid field name");
                     columns[index + 1] = Column.init(name, field.type);    

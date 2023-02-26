@@ -117,7 +117,7 @@ pub fn ArchetypeStorage(comptime T: type) type {
     }
 
     fn debugValidateRow(storage: *Self, row: anytype) void {
-        inline for (std.meta.fields(@TypeOf(row))) |field, index| {
+        inline for (std.meta.fields(@TypeOf(row)), 0..) |field, index| {
             const column = storage.columns[index];
             if (typeId(field.type) != column.typeId) {
               storage.dbg_panic(@typeName(field.type), @tagName(column.name));               
