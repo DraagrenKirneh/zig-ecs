@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 
 pub const Tile = enum {
     empty,
@@ -8,14 +9,9 @@ pub const Tile = enum {
     goal,
 };
 
-const TileMap: []Tile = &[]Tile{
-    .goal,  .tower, .empty,
-    .path,  .path,  .path,
-    .empty, .tower, .spawn,
-};
 
 pub fn find(tile: Tile, map: []const Tile) ?usize {
-    for (map) | each, index | {
+    for (map, 0..) | each, index | {
         if (each == tile) return index;
     }
     return null;
@@ -46,15 +42,17 @@ fn getBottom(index: usize, width: usize, height: usize) ?usize {
 pub fn createPath(alloc: std.mem.Allocator, width: usize, height: usize, map: []const Tile) ![]const usize {
     var list = std.ArrayList(usize).init(alloc);
 
-    var currentIndex = find(.spawn, map);
-    var lastIndex = currentIndex;
-    if (currentIndex) | ix | {
+    var maybeIndex = find(.spawn, map);
+    
+    if (maybeIndex) | ix | {
         try list.append(ix);
     } else {
         return error.TileMissingSpawn;
     }
-
+    
     var done = false;
+    var lastIndex = maybeIndex.?;
+    var currentIndex = lastIndex;
     while (!done) {
         var c = currentIndex;
         if(getLeft(currentIndex, width)) | i | {
@@ -122,7 +120,7 @@ test "getBottom" {
         6, 7, 8,
         null, null, null
     };
-    for (g) | each, index | {
+    for (g, 0..) | each, index | {
         var r  = getBottom(index, 3, 3);
         if (each == null) { try std.testing.expect(r == null); }
         else { try std.testing.expectEqual(each, r.?); }
@@ -136,7 +134,7 @@ test "getTop" {
         3, 4, 5,
         
     };
-    for (g) | each, index | {
+    for (g, 0..) | each, index | {
         var r  = getTop(index, 3);
         if (each == null) { try std.testing.expect(r == null); }
         else { try std.testing.expectEqual(each, r.?); }
@@ -150,7 +148,7 @@ test "getLeft" {
         null, 3, 4,
         null, 6, 7,
     };
-    for (g) | each, index | {
+    for (g, 0..) | each, index | {
         var r  = getLeft(index, 3);
         if (each == null) { try std.testing.expect(r == null); }
         else { try std.testing.expectEqual(each, r.?); }
@@ -164,7 +162,7 @@ test "getRight" {
         4, 5, null,
         7, 8, null,
     };
-    for (g) | each, index | {
+    for (g, 0..) | each, index | {
         var r  = getRight(index, 3);
         if (each == null) { try std.testing.expect(r == null); }
         else { try std.testing.expectEqual(each, r.?); }
@@ -173,4 +171,32 @@ test "getRight" {
 
 test "createPath" {
     
+    const tileMap: []const Tile = &[_]Tile{
+        .goal,  .tower, .empty,
+        .path,  .path,  .path,
+        .empty, .tower, .spawn,
+    };
+    
+    var alloc = testing.allocator;
+    var result = try createPath(alloc, 3, 3, tileMap);
+    defer alloc.free(result);
+
+    try testing.expect(result.len == 5);
+
+    var res: usize = 8;
+    try testing.expectEqual(res, result[0]);
+
+    res = 5;
+    try testing.expectEqual(res, result[1]);
+
+    
+    res = 4;
+    try testing.expectEqual(res, result[2]);
+
+    
+    res = 3;
+    try testing.expectEqual(res, result[3]);
+
+    res = 0;
+    try testing.expectEqual(res, result[4]);
 }
