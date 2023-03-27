@@ -9,6 +9,7 @@ pub const ArchetypeStorage = @import("storage.zig").ArchetypeStorage;
 pub const Context = @import("context.zig").Context;
 pub const World = @import("world.zig").World;
 pub const typeId = @import("storage.zig").typeId;
+pub const EventHandler = @import("events.zig").EventHandler;
 
 pub const math = @import("math/math.zig");
 

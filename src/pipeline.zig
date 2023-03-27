@@ -52,6 +52,7 @@ test "Pipeline" {
     name: []const u8,
     rotation: u32,
   };
+  
   const MyStorage = ecs.Entities(Game);
   const allocator = std.testing.allocator;
   const Entry = struct {
