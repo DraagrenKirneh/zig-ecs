@@ -60,7 +60,7 @@ pub const ObjectCache = struct {
     }
 };
 
-const TestKey = struct{};
+const TestKey = struct {};
 const TestData = struct {
     f: f32,
     d: i32,

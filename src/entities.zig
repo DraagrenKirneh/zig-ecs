@@ -235,7 +235,7 @@ pub fn Entities(comptime TComponents: type) type {
         }
 
         /// Returns the archetype storage for the given entity.
-        pub inline fn archetypeByID(self: *Self, entity: EntityID) *ArchetypeStorage {
+        pub inline fn archetypeByID(self: *const Self, entity: EntityID) *ArchetypeStorage {
             const ptr = self.entities.get(entity).?;
             return &self.archetypes.values()[ptr.archetype_index];
         }

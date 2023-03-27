@@ -139,6 +139,12 @@ pub const Vec2f = struct {
         if (self.x > other.x) return .gt;
         return .eq;
     }
+
+    pub inline fn isWithin(self: Self, origin: Self, extent: Self) bool {
+        if (self.x < origin.x or self.y < origin.y) return false;
+        if (self.x > extent.x or self.y > extent.x) return false;
+        return true;
+    }
 };
 
 fn expectEqual(comptime T: type, expected: T, actual: T) !void {

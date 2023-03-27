@@ -22,15 +22,28 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
       inline for (systems) | system | {
         if(!@hasDecl(system, declName)) continue;
         const field = @field(system, declName); 
-
-        var iter = self.context.getIterator(system);  
-        while (iter.next()) | value | {     
-          try @call(.auto, field, .{ value, self.context });          
-        }  
+        const argCount = functionArgCount(field);
+        if (argCount == 1) {
+          // @Maybe context or value depending on param?
+          try @call(.auto, field, .{ self.context });
+        }
+        else if (argCount == 2) {
+          var iter = self.context.getIterator(system);  
+          while (iter.next()) | value | {     
+            try @call(.auto, field, .{ value, self.context });          
+          }
+        }
       }
     }
   };
 }
+
+inline fn functionArgCount(comptime fn_field: anytype) usize {
+   const field_type = @TypeOf(fn_field);
+   const type_info = @typeInfo(field_type);
+   return type_info.Fn.params.len;
+}
+
 
 test "Pipeline" {
   const Game = struct {

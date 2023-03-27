@@ -25,8 +25,11 @@ const DrawController = struct {
   size: math.Vec2f,
   texture: TextureTag,
 
+  const Self = @This();
+
   pub fn draw(self: Self, context: *core.Context) !void {
-    
+    _ = self;
+    _ = context;  
   }
 };
 
@@ -43,10 +46,12 @@ const TowerController = struct {
     towerId: core.Id
   };
 
+  const Self = @This();
+
   pub fn step(self: Self, context: *core.Context) !void {
-    if (cooldown != 0) return;
+    if (self.cooldown != 0) return;
     const tree = try context.getQuery(SpatialQuery, QuadTree, SpatialQuery.generate);
-    const halfRange = range / 2.0;
+    const halfRange = self.range / 2.0;
     const halfVec2f = math.Vec2f.init(halfRange, halfRange);
     const area = math.Rectangle.init(
       self.position.sub(halfVec2f),
@@ -93,7 +98,7 @@ const ProjectileController = struct {
       const distance = self.velocity;
       if (length <= distance) {
         self.position.* = monster.position;
-        const opt_tower = context.entites.getEntity(self.towerId, Tower);
+        const opt_tower = context.entites.getEntity(self.towerId, TowerEntity);
         if (opt_tower) | tower | {
           monster.health = monster.health - tower.damage;
         }

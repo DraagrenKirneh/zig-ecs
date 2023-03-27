@@ -13,7 +13,7 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
         deadList: std.ArrayList(EntityID),
 
         const Self = @This();
-        pub const StateType = Resources;
+        pub const ResourcesType = Resources;
         pub const EntitesType = Entities;
         
         pub fn init(allocator: Allocator, resources: *Resources, entities: *Entities) Self {

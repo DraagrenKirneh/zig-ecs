@@ -38,7 +38,7 @@ const GridTranslator = struct {
 };
 
 
-fn expectUsize(expected: usize, actual: usize) !void {
+fn expectEqual(comptime T: type, expected: T, actual: T) !void {
   return std.testing.expectEqual(expected, actual);
 }
 
@@ -46,20 +46,20 @@ test "grid" {
   var grid = GridTranslator.init(10, 10, 1024, 640);
 
   var pos = try grid.indexAt(1.0, 1.0);
-  try expectUsize(0, pos);
+  try expectEqual(usize, 0, pos);
 
   pos = try grid.indexAt(125.0, 1.0);
-  try expectUsize(1, pos);
+  try expectEqual(usize, 1, pos);
 
   pos = try grid.indexAt(0.0, 65.0);
-  try expectUsize(10, pos);
+  try expectEqual(usize, 10, pos);
 
   pos = try grid.indexAt(125.0, 65.0);
-  try expectUsize(11, pos);
+  try expectEqual(usize, 11, pos);
 
   pos = try grid.indexAt(1023.0, 639.0);
-  try expectUsize(99, pos);
+  try expectEqual(usize, 99, pos);
 
   pos = try grid.indexAt(1024.0, 640.0);
-  try expectUsize(99, pos);
+  try expectEqual(usize, 99, pos);
 }

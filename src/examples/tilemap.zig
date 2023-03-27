@@ -1,4 +1,6 @@
 const std = @import("std");
+const ecs = @import("ecs");
+
 const testing = std.testing;
 
 pub const Tile = enum {
@@ -168,6 +170,26 @@ test "getRight" {
         else { try std.testing.expectEqual(each, r.?); }
     }
 }
+
+const Path = struct {
+  waypoints: []const ecs.Vec2f,
+  
+  const Self = @This();
+
+  pub fn start(self: Self) ecs.Vec2f {
+    return self.waypoints[0];
+  }
+
+  pub fn next(self: Self, point: ecs.Vec2f) ?ecs.Vec2f {
+    for (self.waypoints, 0..) | wp, i | {
+      if (point.compareTo(wp) == .eq) {
+        return if (i + 1 >= self.waypoints.len) null 
+          else self.waypoints[i + 1];
+      }
+    }
+    return null;
+  }
+};
 
 test "createPath" {
     

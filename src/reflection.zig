@@ -211,20 +211,30 @@ pub fn ToEnumFromMethods(comptime T: type, comptime types: []const type) type {
   return ToEnumFromNames(names);
 }
 
+// specialized for pipeline
 pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const []const u8 {
     comptime var names: []const []const u8 = &[_][]const u8{};
     inline for (types) | each | {
         const decls = getDeclsFn(each);
         inline for (decls) | dcl | {
             const fn_info = dcl.func;
-            if (fn_info.params.len != 2) continue;            
-            const argt_0 = fn_info.params[0].type;
-            const argt_1 = fn_info.params[1].type;
-            if (argt_0 == each and argt_1 == *T) {
-                if (!contains(names, dcl.name)) {
+            if (fn_info.params.len == 2) {
+                const argt_0 = fn_info.params[0].type;
+                const argt_1 = fn_info.params[1].type;
+                if (argt_0 == each and argt_1 == *T) {
+                    if (!contains(names, dcl.name)) {
                     names = names ++ &[_][]const u8{ dcl.name };
+                    }
                 }
-            }
+            } 
+            else if (fn_info.params.len == 1) {
+                const argt_0 = fn_info.params[0].type;
+                if (argt_0 == *T) {
+                    if (!contains(names, dcl.name)) {
+                        names = names ++ &[_][]const u8{ dcl.name };
+                    }
+                }
+            }           
         }
     }
     return names;
