@@ -102,12 +102,12 @@ const ProjectileController = struct {
         if (opt_tower) | tower | {
           monster.health = monster.health - tower.damage;
         }
-        try context.kill(self.id);
+        try context.deferRemove(self.id);
       }
       const t = distance / length;
       self.position.* = self.position.lerp(monster.position, t);
     } else {
-      try context.kill(self.id);
+      try context.deferRemove(self.id);
     }
   }
 };

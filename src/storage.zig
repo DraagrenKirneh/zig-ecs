@@ -15,15 +15,8 @@ comptime {
   std.debug.assert(@sizeOf(EntityID) != 0);
 }
 
-const TypeId = enum(usize) { _ };
-
-// typeId implementation by Felix "xq" Queißner
-pub fn typeId(comptime T: type) TypeId {
-    _ = T;
-    return @intToEnum(TypeId, @ptrToInt(&struct {
-        var x: u8 = 0;
-    }.x));
-}
+const TypeId = ecs.TypeId;
+const typeId = ecs.typeId;
 
 pub fn CreateColumn(comptime T: type) type {
   return struct {
