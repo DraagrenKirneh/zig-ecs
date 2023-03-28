@@ -79,7 +79,7 @@ test "Pipeline" {
   };
 
   
-  var b = try MyStorage.init(allocator);
+  var b = MyStorage.init(allocator);
   defer b.deinit();
   var e2 = try b.create(Entry, .{ .rotation = 75 });  
   _ = e2;

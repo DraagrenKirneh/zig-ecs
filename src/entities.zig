@@ -14,6 +14,30 @@ const void_archetype_hash = ecs.void_archetype_hash;
 
 const typeId = ecs.typeId;
 
+const ComponentId = ecs.TypeId;
+
+const ArchetypeId = u64;
+
+const ArchetypeIndex = struct {
+    const Set = std.AutoHashMapUnmanaged(ArchetypeId, void);
+    const Map = std.AutoHashMapUnmanaged(ComponentId, Set);
+
+    allocator: Allocator,
+    map: Map = .{},
+
+    const Self = @This();
+
+    pub fn init(allocator: Allocator) Self {
+        return .{
+            .allocator = allocator,
+        };
+    }
+
+    pub fn getTables(self: *const Self, componentId: ComponentId) ?Set {
+        return self.map.get(componentId);
+    }
+};
+
 pub fn Entities(comptime TComponents: type) type {
     return struct {
         allocator: Allocator,
@@ -28,7 +52,8 @@ pub fn Entities(comptime TComponents: type) type {
         /// A mapping of archetype hash to their storage.
         ///
         /// Database equivalent: table name -> tables representing entities.
-        archetypes: std.AutoArrayHashMapUnmanaged(u64, ArchetypeStorage) = .{},
+        archetypes: std.AutoArrayHashMapUnmanaged(ArchetypeId, ArchetypeStorage) = .{},
+        //index: ArchetypeIndex = .{},
 
         const Self = @This();
         pub const TagType: type = std.meta.FieldEnum(TComponents);
@@ -114,22 +139,8 @@ pub fn Entities(comptime TComponents: type) type {
             };
         }
 
-        pub fn init(allocator: Allocator) !Self {
-            var self = Self{ .allocator = allocator };
-
-            const columns = try allocator.alloc(Column, 1);
-            columns[0] = Column.init(.id, EntityID);
-
-            try self.archetypes.put(allocator, void_archetype_hash, ArchetypeStorage{
-                .allocator = allocator,
-                .len = 0,
-                .capacity = 0,
-                .columns = columns,
-                .block = undefined,
-                .hash = void_archetype_hash,
-            });
-
-            return self;
+        pub fn init(allocator: Allocator) Self {
+            return .{ .allocator = allocator };
         }
 
         pub fn deinit(self: *Self) void {
@@ -144,44 +155,31 @@ pub fn Entities(comptime TComponents: type) type {
 
         /// Returns a new entity.
         pub fn new(self: *Self) !EntityID {
-            const new_id = self.counter;
-            self.counter += 1;
+            return self.create(void, {});            
+        }
 
-            var void_archetype = self.archetypes.getPtr(void_archetype_hash).?;
-            const new_row = try void_archetype.append(.{ .id = new_id });
-            const void_pointer = Pointer{
-                .archetype_index = 0, // void archetype is guaranteed to be first index
-                .row_index = new_row,
-            };
-
-            self.entities.put(self.allocator, new_id, void_pointer) catch |err| {
-                void_archetype.undoAppend();
-                return err;
-            };
-            return new_id;
+        fn getFieldTag(comptime fieldName: []const u8) TagType {
+            return comptime if(std.meta.stringToEnum(TagType, fieldName)) |name| name 
+                else @compileError("invalid field name");
         }
 
         pub fn create(self: *Self, comptime T: type, components: T) !EntityID {
-            const new_id = self.counter;
-            self.counter += 1;
 
             const Wrapper = reflection.StructWrapperWithId(EntityID, T);
 
-            var hash = reflection.typehash(T);  //@fixme archtype hash of id
-            //std.debug.print("\n[1]newhash: {}\n", .{ hash });
+            var hash = reflection.typehash(Wrapper); 
             var archetype_entry = try self.archetypes.getOrPut(self.allocator, hash);
 
-            const column_fields = @typeInfo(T).Struct.fields;
+            const column_fields = @typeInfo(Wrapper).Struct.fields;
             if (!archetype_entry.found_existing) {
-                const columns = self.allocator.alloc(Column, column_fields.len + 1) catch |err| {
+                const columns = self.allocator.alloc(Column, column_fields.len) catch |err| {
                     assert(self.archetypes.swapRemove(hash));
                     return err;
                 };
-                columns[0] = Column.init(.id, EntityID);
+
                 inline for (column_fields, 0..) | field, index | {
-                    // fixme panic test
-                    const name = comptime if (std.meta.stringToEnum(TagType, field.name)) |name| name else @compileError("invalid field name");
-                    columns[index + 1] = Column.init(name, field.type);    
+                    const name = getFieldTag(field.name);
+                    columns[index] = Column.init(name, field.type);    
                 }
 
                 std.sort.sort(Column, columns, {}, by_alignment_name);
@@ -192,25 +190,31 @@ pub fn Entities(comptime TComponents: type) type {
             var current_archetype_storage = archetype_entry.value_ptr;
 
             var row: Wrapper = undefined;
-            const component_fields = @typeInfo(T).Struct.fields;
-            inline for (component_fields) | f | {                            
-                @field(row, f.name) = @field(components, f.name);
+            const component_fields = if(T == void) .{} else @typeInfo(Wrapper).Struct.fields;
+            inline for (component_fields) | f | {              
+                if (@hasField(T, f.name)) {
+                    @field(row, f.name) = @field(components, f.name);
+                }                              
             }
-            row.id = new_id;
-            std.debug.assert(row.id == new_id);
+            if (T == void or !@hasField(T, "id")) {
+                const new_id = self.counter;
+                self.counter += 1;
+                row.id = new_id;    
+            }            
+            //std.debug.assert(row.id == new_id);
 
             const row_index = try current_archetype_storage.append(row);
             const entity_pointer = Pointer{
-                .archetype_index = @intCast(u16, archetype_entry.index), // void archetype is guaranteed to be first index
+                .archetype_index = @intCast(u16, archetype_entry.index), 
                 .row_index = row_index,
             };
 
-            self.entities.put(self.allocator, new_id, entity_pointer) catch |err| {
+            self.putEntityPointer(row.id, entity_pointer) catch |err| {
                 current_archetype_storage.undoAppend();
                 return err;
             };
                        
-            return new_id;
+            return row.id;
         }
 
         /// Removes an entity.
@@ -222,10 +226,7 @@ pub fn Entities(comptime TComponents: type) type {
             // archetype table to point to the row the entity we are removing is currently located.
             if (archetype.len > 1) {
                 const last_row_entity_id = archetype.get(archetype.len - 1, .id, EntityID).?;
-                try self.entities.put(self.allocator, last_row_entity_id, Pointer{
-                    .archetype_index = ptr.archetype_index,
-                    .row_index = ptr.row_index,
-                });
+                try self.putEntityPointer(last_row_entity_id, ptr);
             }
 
             // Perform a swap removal to remove our entity from the archetype table.
@@ -257,7 +258,7 @@ pub fn Entities(comptime TComponents: type) type {
             // Determine the new hash for the archetype + new component
             var have_already = archetype.hasComponent(name);
             const new_hash = if (have_already) old_hash else old_hash ^ std.hash_map.hashString(@tagName(name));
-            std.debug.print("\n[0]newhash: {}\n", .{ new_hash });
+            
             // Find the archetype storage for this entity. Could be a new archetype storage table (if a
             // new component was added), or the same archetype storage table (if just updating the
             // value of a component.)
@@ -321,12 +322,12 @@ pub fn Entities(comptime TComponents: type) type {
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
-            try self.entities.put(self.allocator, swapped_entity_id, old_ptr);
-
-            try self.entities.put(self.allocator, entity, Pointer{
+            try self.putEntityPointer(swapped_entity_id, old_ptr);
+            try self.putEntityPointer(entity, .{
                 .archetype_index = @intCast(u16, archetype_entry.index),
                 .row_index = new_row,
             });
+
             return;
         }
         
@@ -417,12 +418,16 @@ pub fn Entities(comptime TComponents: type) type {
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
-            try self.entities.put(self.allocator, swapped_entity_id, old_ptr);
-
-            try self.entities.put(self.allocator, entity, Pointer{
+            
+            try self.putEntityPointer(swapped_entity_id, old_ptr);
+            try self.putEntityPointer(entity, .{
                 .archetype_index = @intCast(u16, archetype_entry.index),
                 .row_index = new_row,
             });
+        }
+
+        fn putEntityPointer(self: *Self, id: EntityID, ptr: Pointer) !void {
+            return self.entities.put(self.allocator, id, ptr);
         }
 
         // TODO: iteration over all entities
@@ -459,10 +464,16 @@ test "ecc" {
     rotation: u32,
   };
 
+  const EntryWithId = struct {
+    id: ecs.EntityID,
+    location: f32
+  };
   
-  var b = try MyStorage.init(allocator);
+  var b = MyStorage.init(allocator);
   defer b.deinit();
   var e2 = try b.create(Entry, .{ .rotation = 75 });  
+  var exx = try b.create(EntryWithId, .{ .id = 777, .location = 25 });
+  try expectEqualOf(ecs.EntityID, 777, exx);
   //var ccc = b.getComponent(e2, .rotation);
   try expectEqualOf(u32, 75, b.getComponent(e2, .rotation).?);
   //try expectEqualOf(i32, 75, b.getComponent(e2, .rotation).?);

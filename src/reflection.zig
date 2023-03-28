@@ -131,6 +131,11 @@ pub fn typesToHolder(comptime types: []const type) type {
 }
 
 pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) type {
+    if (componentType == void) return struct { id: idType };
+    if (@hasField(componentType, "id")) {
+        //std.debug.assert(@TypeOf(componentType.id) == idType);  // fixme validate or?
+        return componentType; 
+    }
     return blk: {
         const old_fields = std.meta.fields(componentType);
         var new_fields: [old_fields.len + 1] std.builtin.Type.StructField = undefined;

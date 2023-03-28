@@ -38,7 +38,6 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
             for (self.deadList.items) | each | {
                 try self.entities.remove(each);
             }
-            self.deadList.clearRetainingCapacity();
         }
 
         pub fn getIterator(self: *Self, comptime T: type) Iterator(T) {
