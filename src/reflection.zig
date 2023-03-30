@@ -4,115 +4,146 @@ pub const TypeId = enum(usize) { _ };
 
 // typeId implementation by Felix "xq" Queißner
 pub fn typeId(comptime T: type) TypeId {
+    return @intToEnum(TypeId, typeIdValue(T));
+}
+
+pub fn typeIdValue(comptime T: type) usize {
     _ = T;
-    return @intToEnum(TypeId, @ptrToInt(&struct {
+    return @ptrToInt(&struct {
         var x: u8 = 0;
-    }.x));
+    }.x);
+}
+
+pub fn getComponentId(comptime TagType: type, comptime fieldType: type, comptime fieldName: []const u8) usize {
+    const existingTag = comptime std.meta.stringToEnum(TagType, fieldName);
+    if (existingTag) |tag| return @enumToInt(tag);
+    return switch (getSpecial(TagType, fieldType)) {
+        .Pair => componentPairId(TagType, fieldType),
+        .Wildcard => componentPairId(TagType, fieldType) | highBit,
+        .Component => unreachable,
+        .Invalid => unreachable,
+    };
+    //return componentPairId(TagType, fieldType);
+}
+
+pub fn getSpecial(comptime TagType: type, comptime fieldType: type) Special {
+    _ = TagType;
+    const type_info: std.builtin.Type = @typeInfo(fieldType);
+    if (type_info != .Struct) return .Invalid;
+    const type_struct = type_info.Struct;
+    if (type_struct.fields.len != 2) return .Invalid;
+    if (@hasDecl(fieldType, "tag")) {
+        //if (@TypeOf(@field(fieldType, "tag")) != TagType) return .Invalid;
+        return .Wildcard;
+    }
+    if (@hasDecl(fieldType, "firstTag") and @hasDecl(fieldType, "secondTag")) {
+        return .Pair;
+    }
+    return .Invalid;
+}
+
+pub const Special = enum { Component, Pair, Wildcard, Invalid };
+
+pub const highBit: usize = @intCast(usize, 1 << 63);
+
+pub fn componentPairId(comptime Tag: type, comptime field_type: type) usize {
+    const pairId: usize = std.meta.fields(Tag).len + typeIdValue(field_type);
+    std.debug.assert(pairId & highBit != highBit);
+    return pairId;
+}
+
+pub fn extractComponentIds(comptime ValueT: type, comptime TagType: type) []const usize {
+    return Blk: {
+        const fields = std.meta.fields(ValueT);
+        var tags: [fields.len]usize = undefined;
+        inline for (fields, 0..) |f, i| {
+            tags[i] = comptime getComponentId(TagType, f.type, f.name);
+        }
+        break :Blk tags[0..];
+    };
 }
 
 pub fn ToEnum(comptime components: anytype) type {
-  return Blk: {
-      const fields = std.meta.fields(@TypeOf(components));
-      var tags: [fields.len + 1] std.builtin.Type.EnumField = undefined;
-      tags[0] = .{
-        .name = "id",
-        .value = 0
-      };
-      inline for (fields, 0..) |f, i| {
-          tags[i + 1] = .{
-              .name = f.name,
-              .value = i + 1,
-          };
-      }
-      const type_info = std.builtin.Type{ 
-          .Enum = .{
-              .tag_type = u32,
-              .fields = &tags,
-              .decls = &.{},
-              .is_exhaustive = true,
-          }
-      };
-      break :Blk @Type(type_info);
-  };
+    return Blk: {
+        const fields = std.meta.fields(@TypeOf(components));
+        var tags: [fields.len + 1]std.builtin.Type.EnumField = undefined;
+        tags[0] = .{ .name = "id", .value = 0 };
+        inline for (fields, 0..) |f, i| {
+            tags[i + 1] = .{
+                .name = f.name,
+                .value = i + 1,
+            };
+        }
+        const type_info = std.builtin.Type{ .Enum = .{
+            .tag_type = u32,
+            .fields = &tags,
+            .decls = &.{},
+            .is_exhaustive = true,
+        } };
+        break :Blk @Type(type_info);
+    };
 }
 
 pub fn ToEnumFromNames(comptime names: []const []const u8) type {
-  const Type = std.builtin.Type;
-  return Blk: {
-      var tags: [names.len] Type.EnumField = undefined;
-      inline for (names, 0..) |name, i| {
-          tags[i] = .{
-              .name = name,
-              .value = i,
-          };
-      }
-      const type_info = Type{ 
-          .Enum = .{
-              .tag_type = std.math.IntFittingRange(0, names.len - 1),
-              .fields = &tags,
-              .decls = &.{},
-              .is_exhaustive = true,
-          }
-      };
-      break :Blk @Type(type_info);
-  };
+    //const Type = std.builtin.Type;
+    return Blk: {
+        var tags: [names.len]Type.EnumField = undefined;
+        inline for (names, 0..) |name, i| {
+            tags[i] = .{
+                .name = name,
+                .value = i,
+            };
+        }
+        const type_info = Type{ .Enum = .{
+            .tag_type = std.math.IntFittingRange(0, names.len - 1),
+            .fields = &tags,
+            .decls = &.{},
+            .is_exhaustive = true,
+        } };
+        break :Blk @Type(type_info);
+    };
 }
 
 pub fn EnumFromType(comptime T: type) type {
     return Blk: {
-      const fields = std.meta.fields(T);
-      var tags: [fields.len + 1] std.builtin.Type.EnumField = undefined;
-      tags[0] = .{
-        .name = "id",
-        .value = 0
-      };
-      inline for (fields, 0..) |f, i| {
-          tags[i + 1] = .{
-              .name = f.name,
-              .value = i + 1,
-          };
-      }
-      const type_info = std.builtin.Type{ 
-          .Enum = .{
-              .layout = .Auto,
-              .tag_type = u32,
-              .fields = &tags,
-              .decls = &.{},
-              .is_exhaustive = true,
-          }
-      };
-      break :Blk @Type(type_info);
-  };
+        const fields = std.meta.fields(T);
+        var tags: [fields.len + 1]std.builtin.Type.EnumField = undefined;
+        tags[0] = .{ .name = "id", .value = 0 };
+        inline for (fields, 0..) |f, i| {
+            tags[i + 1] = .{
+                .name = f.name,
+                .value = i + 1,
+            };
+        }
+        const type_info = std.builtin.Type{ .Enum = .{
+            .layout = .Auto,
+            .tag_type = u32,
+            .fields = &tags,
+            .decls = &.{},
+            .is_exhaustive = true,
+        } };
+        break :Blk @Type(type_info);
+    };
 }
 
 pub fn extract(comptime ValueT: type, comptime TagType: type) []const TagType {
     return Blk: {
-      const fields = std.meta.fields(ValueT);
-      var tags: [fields.len] TagType = undefined;
-      inline for (fields, 0..) |f, i| {
-        //tags[i] = comptime std.meta.stringToEnum(TagType, f.name).?;           
-        tags[i] = @field(TagType, f.name);
-      }
-      break :Blk tags[0..];
-  };
-}
-
-pub fn tagsToString(comptime T: type, comptime tags: []const T) []const []const u8 {
-    return blk: {
-        var array: [tags.len] []const u8 = undefined;
-        inline for (tags, 0..) | t, i | {
-            array[i] = @tagName(t);
+        const fields = std.meta.fields(ValueT);
+        var tags: [fields.len]TagType = undefined;
+        inline for (fields, 0..) |f, i| {
+            //tags[i] = comptime std.meta.stringToEnum(TagType, f.name).?;
+            tags[i] = @field(TagType, f.name);
         }
-        break :blk array[0..];
+        break :Blk tags[0..];
     };
 }
 
 pub fn typesToHolder(comptime types: []const type) type {
-    var fields: [types.len] std.builtin.Type.StructField = undefined;
-    inline for (types, 0..) | t, index | {
+    var fields: [types.len]std.builtin.Type.StructField = undefined;
+    inline for (types, 0..) |t, index| {
         //const t_info_optional = std.builtin.TypeInfo { .Optional = .{ .child = t } };
         fields[index] = .{
-            .name =  t.name,
+            .name = t.name,
             .type = t, //@Type(t_info_optional),
             .default_value = null,
             .is_comptime = false,
@@ -127,18 +158,42 @@ pub fn typesToHolder(comptime types: []const type) type {
             .fields = &fields,
         },
     });
+}
 
+pub fn ComponentUnion(comptime T: type) type {
+    const fields = std.meta.fields(T);
+    var union_fields: [fields.len]std.builtin.Type.UnionField = undefined;
+    inline for (fields, 0..) |namespace, i| {
+        //const component_enum = std.meta.FieldEnum(namespace.type);
+        union_fields[i] = .{
+            .name = namespace.name,
+            .type = namespace.type,
+            .alignment = @alignOf(namespace.type),
+        };
+    }
+
+    // need type_info variable (rather than embedding in @Type() call)
+    // to work around stage 1 bug
+    const type_info = std.builtin.Type{
+        .Union = .{
+            .layout = .Auto,
+            .tag_type = std.meta.FieldEnum(T),
+            .fields = &union_fields,
+            .decls = &.{},
+        },
+    };
+    return @Type(type_info);
 }
 
 pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) type {
     if (componentType == void) return struct { id: idType };
     if (@hasField(componentType, "id")) {
         //std.debug.assert(@TypeOf(componentType.id) == idType);  // fixme validate or?
-        return componentType; 
+        return componentType;
     }
     return blk: {
         const old_fields = std.meta.fields(componentType);
-        var new_fields: [old_fields.len + 1] std.builtin.Type.StructField = undefined;
+        var new_fields: [old_fields.len + 1]std.builtin.Type.StructField = undefined;
         new_fields[0] = .{
             .name = "id",
             .type = idType,
@@ -146,9 +201,9 @@ pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) 
             .is_comptime = false,
             .alignment = if (@sizeOf(idType) > 0) @alignOf(idType) else 0,
         };
-        inline for (old_fields, 0..) | old_field, index | {
+        inline for (old_fields, 0..) |old_field, index| {
             new_fields[index + 1] = old_field;
-        }   
+        }
         const type_info = std.builtin.Type{
             .Struct = .{
                 .layout = .Auto,
@@ -164,7 +219,7 @@ pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) 
 pub fn typehash(comptime T: type) u64 {
     return blk: {
         var hash: u64 = std.math.maxInt(u64);
-        for (std.meta.fieldNames(T)) | name | {
+        for (std.meta.fieldNames(T)) |name| {
             hash ^= std.hash_map.hashString(name);
         }
         break :blk hash;
@@ -205,41 +260,40 @@ pub fn NamedArgsTuple(comptime Function: type, names: []const []const u8) type {
 }
 
 fn contains(comptime array: []const []const u8, comptime item: []const u8) bool {
-    for (array) | each | {
+    for (array) |each| {
         if (std.mem.eql(u8, each, item)) return true;
     }
     return false;
 }
 
 pub fn ToEnumFromMethods(comptime T: type, comptime types: []const type) type {
-  const names = getDeclEnumNames(T, types);
-  return ToEnumFromNames(names);
+    const names = getDeclEnumNames(T, types);
+    return ToEnumFromNames(names);
 }
 
 // specialized for pipeline
 pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const []const u8 {
     comptime var names: []const []const u8 = &[_][]const u8{};
-    inline for (types) | each | {
+    inline for (types) |each| {
         const decls = getDeclsFn(each);
-        inline for (decls) | dcl | {
+        inline for (decls) |dcl| {
             const fn_info = dcl.func;
             if (fn_info.params.len == 2) {
                 const argt_0 = fn_info.params[0].type;
                 const argt_1 = fn_info.params[1].type;
                 if (argt_0 == each and argt_1 == *T) {
                     if (!contains(names, dcl.name)) {
-                    names = names ++ &[_][]const u8{ dcl.name };
+                        names = names ++ &[_][]const u8{dcl.name};
                     }
                 }
-            } 
-            else if (fn_info.params.len == 1) {
+            } else if (fn_info.params.len == 1) {
                 const argt_0 = fn_info.params[0].type;
                 if (argt_0 == *T) {
                     if (!contains(names, dcl.name)) {
-                        names = names ++ &[_][]const u8{ dcl.name };
+                        names = names ++ &[_][]const u8{dcl.name};
                     }
                 }
-            }           
+            }
         }
     }
     return names;
@@ -259,11 +313,103 @@ fn getDeclsFn(comptime T: type) []const Entry {
             if (!decl.is_pub) continue;
             const field = @field(T, decl.name);
             const info = @typeInfo(@TypeOf(field));
-            if (info == .Fn){
+            if (info == .Fn) {
                 array[count] = Entry{ .name = decl.name, .func = info.Fn };
                 count += 1;
-            }            
+            }
         }
         return array[0..count];
     }
+}
+
+// --------------------------------- //
+
+pub fn Custom_FieldType(comptime T: type, comptime field: Custom_FieldEnum(T)) type {
+    if (@typeInfo(T) != .Struct and @typeInfo(T) != .Union) {
+        @compileError("Expected struct or union, found '" ++ @typeName(T) ++ "'");
+    }
+
+    return custom_fieldInfo(T, field).type;
+}
+
+const Type = std.builtin.Type;
+
+pub fn custom_fieldInfo(comptime T: type, comptime field: Custom_FieldEnum(T)) switch (@typeInfo(T)) {
+    .Struct => Type.StructField,
+    else => @compileError("Expected struct, union, error set or enum type, found '" ++ @typeName(T) ++ "'"),
+} {
+    return std.meta.fields(T)[@enumToInt(field)];
+}
+
+pub fn MakeExhausive(comptime T: type, comptime S: type) type {
+    const oldEnum = std.meta.FieldEnum(T);
+    const fields = std.meta.fields(oldEnum);
+    return @Type(.{
+        .Enum = .{
+            .tag_type = S,
+            .fields = fields,
+            .decls = &.{},
+            .is_exhaustive = true,
+        },
+    });
+}
+
+/// Returns an enum with a variant named after each field of `T`.
+pub fn Custom_FieldEnum(comptime T: type) type {
+    const field_infos = std.meta.fields(T);
+
+    if (field_infos.len == 0) {
+        return @Type(.{
+            .Enum = .{
+                .tag_type = u0,
+                .fields = &.{},
+                .decls = &.{},
+                .is_exhaustive = true,
+            },
+        });
+    }
+
+    var enumFields: [field_infos.len]std.builtin.Type.EnumField = undefined;
+    var decls = [_]std.builtin.Type.Declaration{};
+    inline for (field_infos, 0..) |field, i| {
+        enumFields[i] = .{
+            .name = field.name,
+            .value = i,
+        };
+    }
+    return @Type(.{
+        .Enum = .{
+            .tag_type = u32,
+            .fields = &enumFields,
+            .decls = &decls,
+            .is_exhaustive = false,
+        },
+    });
+}
+
+pub fn Pair(comptime A: type, comptime B: type, comptime Tag: type, comptime tagA: Tag, comptime tagB: Tag) type {
+    if (A == void and B == void) return struct {
+        const firstTag: Tag = tagA;
+        const secondTag: Tag = tagB;
+        first: A = {},
+        second: B = {},
+    };
+    if (A == void) return struct {
+        const firstTag: Tag = tagA;
+        const secondTag: Tag = tagB;
+        first: A = {},
+        second: B,
+    };
+    if (B == void) return struct {
+        const firstTag: Tag = tagA;
+        const secondTag: Tag = tagB;
+        first: A,
+        second: B = {},
+    };
+    return struct {
+        const firstTag: Tag = tagA;
+        const secondTag: Tag = tagB;
+        first: A,
+        second: B,
+    };
 }

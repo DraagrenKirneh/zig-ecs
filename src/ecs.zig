@@ -1,4 +1,3 @@
-
 // An entity ID uniquely identifies an entity globally within an Entities set.
 pub const EntityID = u64;
 pub const void_archetype_hash = @import("std").math.maxInt(EntityID);
@@ -18,5 +17,5 @@ pub const TypeId = reflection.TypeId;
 pub const typeId = reflection.typeId;
 
 test {
-  @import("std").testing.refAllDecls(@This());
+    @import("std").testing.refAllDecls(@This());
 }

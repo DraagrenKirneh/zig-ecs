@@ -5,6 +5,8 @@ const testing = std.testing;
 const builtin = @import("builtin");
 const reflection = @import("reflection.zig");
 const ecs = @import("ecs.zig");
+const autoHash = std.hash.autoHash;
+const Wyhash = std.hash.Wyhash;
 
 const assert = std.debug.assert;
 
@@ -12,38 +14,144 @@ const EntityID = ecs.EntityID;
 //const ArchetypeStorage = storage.ArchetypeStorage;
 const void_archetype_hash = ecs.void_archetype_hash;
 
-const typeId = ecs.typeId;
+//const typeId = ecs.typeId;
 
 const ComponentId = ecs.TypeId;
 
 const ArchetypeId = u64;
 
-const ArchetypeIndex = struct {
-    const Set = std.AutoHashMapUnmanaged(ArchetypeId, void);
-    const Map = std.AutoHashMapUnmanaged(ComponentId, Set);
-
-    allocator: Allocator,
-    map: Map = .{},
-
-    const Self = @This();
-
-    pub fn init(allocator: Allocator) Self {
-        return .{
-            .allocator = allocator,
-        };
+fn copyStructToStruct(comptime Output: type, comptime Input: type, input: Input) Output {
+    var output: Output = undefined;
+    output.id = 0;
+    if (Input == void) return output;
+    const component_fields = @typeInfo(Input).Struct.fields;
+    inline for (component_fields) |f| {
+        if (@hasField(Output, f.name)) {
+            @field(output, f.name) = @field(input, f.name);
+        }
     }
 
-    pub fn getTables(self: *const Self, componentId: ComponentId) ?Set {
-        return self.map.get(componentId);
-    }
-};
+    return output;
+}
+
+const TypeId = reflection.TypeId;
+
+pub fn ArchetypeIndexes(comptime Tag: type) type {
+    return struct {
+        const ComponentCount = std.meta.fields(Tag).len;
+        const Set = std.AutoHashMapUnmanaged(u16, void);
+        const Map = std.AutoHashMapUnmanaged(usize, Set);
+
+        const emptySet: Set = .{};
+
+        allocator: Allocator,
+        components: [ComponentCount]Set = undefined,
+        wildcards: [ComponentCount]Set = undefined,
+        pairs: Map = .{},
+
+        const Self = @This();
+
+        pub fn init(allocator: Allocator) Self {
+            var self = Self{ .allocator = allocator };
+
+            for (0..ComponentCount) |i| {
+                self.components[i] = .{};
+                self.wildcards[i] = .{};
+            }
+
+            return self;
+        }
+
+        pub fn getComponentIndexIterator(self: *const Self, tag: Tag) Set.KeyIterator {
+            return self.components[@enumToInt(tag)].keyIterator();
+        }
+
+        pub fn hasComponent(self: *const Self, tag: Tag, index: u16) bool {
+            return self.components[@enumToInt(tag)].contains(index);
+        }
+
+        pub fn hasPair(self: *const Self, id: usize, index: u16) bool {
+            return if (self.pairs.get(id)) |set| set.contains(index) else false;
+        }
+
+        pub fn hasWildcard(self: *const Self, tag: Tag, index: u16) bool {
+            return self.wildcards[@enumToInt(tag)].contains(index);
+        }
+
+        pub fn haveItem(self: *const Self, tag: Tag, id: usize, index: u16) bool {
+            if (id < ComponentCount) return self.components[id].contains(index);
+            if (id & reflection.highBit == 0) return self.hasPair(id, index);
+            return self.wildcards[@enumToInt(tag)].contains(index);
+        }
+
+        pub fn getSetIterator(self: *const Self, comptime T: type, id: usize) Set.KeyIterator {
+            if (id < ComponentCount) return self.components[id].keyIterator();
+            if (id & reflection.highBit == reflection.highBit) {
+                if (@hasDecl(T, "tag")) {
+                    const t_info: Tag = @field(T, "tag");
+                    return self.wildcards[@enumToInt(t_info)].keyIterator();
+                }
+                return emptySet.keyIterator();
+            }
+            if (self.pairs.get(id)) |k| return k.keyIterator();
+            return emptySet.keyIterator();
+        }
+
+        pub fn registerPair(self: *Self, id: usize, tag: Tag, archetypeIndex: u16) !void {
+            var pair_entry = try self.pairs.getOrPut(self.allocator, id);
+            if (!pair_entry.found_existing) {
+                pair_entry.value_ptr = Set{};
+            }
+            try pair_entry.value_ptr.put(self.allocator, archetypeIndex, {});
+            try self.wildcards[@enumToInt(tag)].put(self.allocator, archetypeIndex, {});
+        }
+
+        pub fn registerComponent(self: *Self, tag: Tag, archetypeIndex: u16) !void {
+            return self.components[@enumToInt(tag)].put(self.allocator, archetypeIndex, {});
+        }
+
+        pub fn IndexIterator(comptime T: type) type {
+            return struct {
+                const fields = std.meta.fields(T);
+
+                indexes: *const Self,
+                iterator: Self.Set.KeyIterator = undefined,
+
+                const Iterator = @This();
+
+                pub fn init(indexes: *const Self) Iterator {
+                    const ix = fields.len - 1;
+                    const cid = reflection.getComponentId(Tag, fields[ix].type, fields[ix].name);
+                    //const existingTag = comptime std.meta.stringToEnum(Tag, fields[ix].name).?;
+
+                    return .{
+                        .indexes = indexes,
+                        .iterator = indexes.getSetIterator(fields[ix].type, cid),
+                    };
+                }
+
+                pub fn next(it: *Iterator) ?u16 {
+                    loop: while (it.iterator.next()) |archetype| {
+                        inline for (1..fields.len) |fIndex| {
+                            const field = fields[fields.len - fIndex - 1];
+                            const id = reflection.getComponentId(Tag, field.type, field.name);
+                            if (!it.haveItem(id, archetype)) continue :loop;
+                        }
+                        return archetype;
+                    }
+                    return null;
+                }
+            };
+        }
+    };
+}
 
 pub fn Entities(comptime TComponents: type) type {
     return struct {
         allocator: Allocator,
 
         /// TODO!
-        counter: EntityID = 0,
+        counter: EntityID = 1,
 
         /// A mapping of entity IDs (array indices) to where an entity's component values are actually
         /// stored.
@@ -53,12 +161,17 @@ pub fn Entities(comptime TComponents: type) type {
         ///
         /// Database equivalent: table name -> tables representing entities.
         archetypes: std.AutoArrayHashMapUnmanaged(ArchetypeId, ArchetypeStorage) = .{},
-        //index: ArchetypeIndex = .{},
 
         const Self = @This();
         pub const TagType: type = std.meta.FieldEnum(TComponents);
-        const ArchetypeStorage = ecs.ArchetypeStorage(TagType);
+        //pub const Tag: type = reflection.MakeExhausive(TagType, u16);
+
+        const ColumnIdType = usize;
+        const ArchetypeStorage = ecs.ArchetypeStorage(ColumnIdType, TagType);
         const Column = ArchetypeStorage.Column;
+        const ComponentIdValue = @enumToInt(TagType.id);
+
+        const componentCount = std.meta.fields(TComponents).len;
         /// Points to where an entity is stored, specifically in which archetype table and in which row
         /// of that table. That is, the entity's component values are stored at:
         ///
@@ -71,33 +184,62 @@ pub fn Entities(comptime TComponents: type) type {
             row_index: u32,
         };
 
-        fn by_alignment_name(context: void, lhs: Column, rhs: Column) bool {
-          _ = context;
-          if (lhs.alignment < rhs.alignment) return true;
-          return @enumToInt(lhs.name) < @enumToInt(rhs.name);
+        fn tagType(comptime tag: TagType) type {
+            return std.meta.fieldInfo(TComponents, tag).type;
         }
 
-        pub fn TypedIter(comptime T: type) type {
-          const components = reflection.extract(T, TagType);
-          return struct {
+        pub fn Pair(comptime First: TagType, comptime Second: TagType) type {
+            const TF = tagType(First);
+            const TS = tagType(Second);
+
+            return reflection.Pair(TF, TS, TagType, First, Second);
+        }
+
+        pub fn Wildcard(comptime First: TagType) type {
+            return struct {
+                pub const tag = First;
+                first: tagType(First),
+                second: reflection.ComponentUnion(TComponents),
+            };
+        }
+
+        fn by_alignment_name(context: void, lhs: Column, rhs: Column) bool {
+            _ = context;
+            if (lhs.alignment < rhs.alignment) return true;
+            return lhs.id < rhs.id;
+        }
+
+        fn higestComponentId(comptime T: type) usize {
+            var max = 0;
+            inline for (std.meta.fields(T)) |field| {
+                const value = reflection.getComponentId(TagType, field.type, field.name);
+                max = std.math.max(max, value);
+            }
+        }
+
+        pub fn TypedIter2(comptime T: type) type {
+            return struct {
                 entities: *const Self,
                 archetype_index: usize = 0,
                 row_index: u32 = 0,
 
-                const Iterator = @This();              
+                const Iterator = @This();
+                const Components = reflection.extractComponentIds(T, TagType);
 
                 pub fn init(entities: *const Self) Iterator {
-                  return .{
-                    .entities = entities,
-                  };
+                    var iterator = Iterator{
+                        .entities = entities,
+                    };
+
+                    return iterator;
                 }
 
-                pub fn next(iter: *Iterator) ?T {                    
-                    const entities = iter.entities;                    
+                pub fn next(iter: *Iterator) ?T {
+                    const entities = iter.entities;
                     // If the archetype table we're looking at does not contain the components we're
                     // querying for, keep searching through tables until we find one that does.
                     var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
-                    while (!hasComponents(archetype, components) or iter.row_index >= archetype.len) {                        
+                    while (!hasComponents(archetype, Components) or iter.row_index >= archetype.len) {
                         iter.archetype_index += 1;
                         iter.row_index = 0;
                         if (iter.archetype_index >= entities.archetypes.count()) {
@@ -105,7 +247,45 @@ pub fn Entities(comptime TComponents: type) type {
                         }
                         archetype = entities.archetypes.entries.get(iter.archetype_index).value;
                     }
-                    
+
+                    var row_index = iter.row_index;
+                    iter.row_index += 1;
+                    return archetype.getInto(row_index, T);
+                }
+            };
+        }
+
+        pub fn TypedIter(comptime T: type) type {
+            return struct {
+                entities: *const Self,
+                archetype_index: usize = 0,
+                row_index: u32 = 0,
+
+                const Iterator = @This();
+                const Components = reflection.extractComponentIds(T, TagType);
+
+                pub fn init(entities: *const Self) Iterator {
+                    var iterator = Iterator{
+                        .entities = entities,
+                    };
+
+                    return iterator;
+                }
+
+                pub fn next(iter: *Iterator) ?T {
+                    const entities = iter.entities;
+                    // If the archetype table we're looking at does not contain the components we're
+                    // querying for, keep searching through tables until we find one that does.
+                    var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+                    while (!hasComponents(archetype, Components) or iter.row_index >= archetype.len) {
+                        iter.archetype_index += 1;
+                        iter.row_index = 0;
+                        if (iter.archetype_index >= entities.archetypes.count()) {
+                            return null;
+                        }
+                        archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+                    }
+
                     var row_index = iter.row_index;
                     iter.row_index += 1;
                     return archetype.getInto(row_index, T);
@@ -115,7 +295,7 @@ pub fn Entities(comptime TComponents: type) type {
 
         pub fn getEntity(self: *const Self, comptime T: type, id: EntityID) ?T {
             const optional_ptr = self.entities.get(id);
-            if (optional_ptr) | ptr | {
+            if (optional_ptr) |ptr| {
                 const archetype = self.archetypeByID(id);
                 const components = reflection.extract(T, TagType);
                 if (!archetype.hasComponents(components)) return null;
@@ -124,10 +304,12 @@ pub fn Entities(comptime TComponents: type) type {
             return null;
         }
 
-        fn hasComponents(storage: ArchetypeStorage, comptime components: []const TagType) bool {
+        // @FixMe naming
+        fn hasComponents(storage: ArchetypeStorage, components: []const ColumnIdType) bool {
             var archetype = storage;
             if (components.len == 0) return false;
-            inline for (components) |component| {
+            for (components) |component| {
+                //const myName = swapTag2(component);
                 if (!archetype.hasComponent(component)) return false;
             }
             return true;
@@ -147,7 +329,7 @@ pub fn Entities(comptime TComponents: type) type {
             self.entities.deinit(self.allocator);
 
             var iter = self.archetypes.iterator();
-            while (iter.next()) |entry| {           
+            while (iter.next()) |entry| {
                 entry.value_ptr.deinit();
             }
             self.archetypes.deinit(self.allocator);
@@ -155,57 +337,60 @@ pub fn Entities(comptime TComponents: type) type {
 
         /// Returns a new entity.
         pub fn new(self: *Self) !EntityID {
-            return self.create(void, {});            
+            return self.create(void, {});
         }
 
-        fn getFieldTag(comptime fieldName: []const u8) TagType {
-            return comptime if(std.meta.stringToEnum(TagType, fieldName)) |name| name 
-                else @compileError("invalid field name");
+        fn hashType(comptime T: type) u64 {
+            var hasher = Wyhash.init(0);
+
+            inline for (std.meta.fields(T)) |field| {
+                const number = reflection.getComponentId(TagType, field.type, field.name);
+                hasher.update(std.mem.asBytes(&number));
+            }
+            return hasher.final();
+        }
+
+        fn hashExisting(current: u64, next: u64) u64 {
+            return Wyhash.hash(current, std.mem.asBytes(&next));
+        }
+
+        fn allocColumns(self: *Self, count: usize, archetypeHash: u64) ![]Column {
+            return self.allocator.alloc(Column, count) catch |err| {
+                assert(self.archetypes.swapRemove(archetypeHash));
+                return err;
+            };
         }
 
         pub fn create(self: *Self, comptime T: type, components: T) !EntityID {
+            const Row = reflection.StructWrapperWithId(EntityID, T);
 
-            const Wrapper = reflection.StructWrapperWithId(EntityID, T);
-
-            var hash = reflection.typehash(Wrapper); 
+            const hash = comptime hashType(Row);
             var archetype_entry = try self.archetypes.getOrPut(self.allocator, hash);
 
-            const column_fields = @typeInfo(Wrapper).Struct.fields;
             if (!archetype_entry.found_existing) {
-                const columns = self.allocator.alloc(Column, column_fields.len) catch |err| {
-                    assert(self.archetypes.swapRemove(hash));
-                    return err;
-                };
+                const column_fields = std.meta.fields(Row);
+                const columns = try self.allocColumns(column_fields.len, hash);
 
-                inline for (column_fields, 0..) | field, index | {
-                    const name = getFieldTag(field.name);
-                    columns[index] = Column.init(name, field.type);    
+                inline for (column_fields, 0..) |field, index| {
+                    const columnId = reflection.getComponentId(TagType, field.type, field.name);
+                    columns[index] = Column.init(columnId, field.type);
                 }
 
                 std.sort.sort(Column, columns, {}, by_alignment_name);
                 archetype_entry.value_ptr.* = ArchetypeStorage.init(self.allocator, columns);
-                try archetype_entry.value_ptr.ensureUnusedCapacity(10);
             }
 
             var current_archetype_storage = archetype_entry.value_ptr;
 
-            var row: Wrapper = undefined;
-            const component_fields = if(T == void) .{} else @typeInfo(Wrapper).Struct.fields;
-            inline for (component_fields) | f | {              
-                if (@hasField(T, f.name)) {
-                    @field(row, f.name) = @field(components, f.name);
-                }                              
-            }
-            if (T == void or !@hasField(T, "id")) {
-                const new_id = self.counter;
+            var row = copyStructToStruct(Row, T, components);
+            if (row.id == 0) {
+                row.id = self.counter;
                 self.counter += 1;
-                row.id = new_id;    
-            }            
-            //std.debug.assert(row.id == new_id);
+            }
 
             const row_index = try current_archetype_storage.append(row);
             const entity_pointer = Pointer{
-                .archetype_index = @intCast(u16, archetype_entry.index), 
+                .archetype_index = @intCast(u16, archetype_entry.index),
                 .row_index = row_index,
             };
 
@@ -213,7 +398,7 @@ pub fn Entities(comptime TComponents: type) type {
                 current_archetype_storage.undoAppend();
                 return err;
             };
-                       
+
             return row.id;
         }
 
@@ -225,7 +410,7 @@ pub fn Entities(comptime TComponents: type) type {
             // A swap removal will be performed, update the entity stored in the last row of the
             // archetype table to point to the row the entity we are removing is currently located.
             if (archetype.len > 1) {
-                const last_row_entity_id = archetype.get(archetype.len - 1, .id, EntityID).?;
+                const last_row_entity_id = archetype.get(archetype.len - 1, ComponentIdValue, EntityID).?;
                 try self.putEntityPointer(last_row_entity_id, ptr);
             }
 
@@ -241,44 +426,48 @@ pub fn Entities(comptime TComponents: type) type {
             return &self.archetypes.values()[ptr.archetype_index];
         }
 
-        /// Sets the named component to the specified value for the given entity,
-        /// moving the entity from it's current archetype table to the new archetype
-        /// table if required.
-        pub fn setComponent(
+        pub fn setPair(
             self: *Self,
             entity: EntityID,
-            comptime name: TagType,
-            component: std.meta.fieldInfo(TComponents, name).type,
+            comptime firstTag: TagType,
+            comptime secondTag: TagType,
+            component: Pair(firstTag, secondTag),
+        ) !void {
+            const Component = Pair(firstTag, secondTag);
+            const pairId: usize = reflection.componentPairId(TagType, Component);
+            return self.privSetComponent(entity, pairId, Component, component);
+        }
+
+        fn privSetComponent(
+            self: *Self,
+            entity: EntityID,
+            columnId: ColumnIdType,
+            comptime Component: type,
+            component: Component,
         ) !void {
             var archetype = self.archetypeByID(entity);
-                
+
             // Determine the old hash for the archetype.
             const old_hash = archetype.hash;
 
-            // Determine the new hash for the archetype + new component
-            var have_already = archetype.hasComponent(name);
-            const new_hash = if (have_already) old_hash else old_hash ^ std.hash_map.hashString(@tagName(name));
-            
+            var have_already = archetype.hasComponent(columnId);
+            const new_hash = if (have_already) old_hash else hashExisting(old_hash, columnId);
+
             // Find the archetype storage for this entity. Could be a new archetype storage table (if a
             // new component was added), or the same archetype storage table (if just updating the
             // value of a component.)
             var archetype_entry = try self.archetypes.getOrPut(self.allocator, new_hash);
 
-            // getOrPut allocated, so the archetype we retrieved earlier may no longer be a valid
-            // pointer. Refresh it now:
-            archetype = self.archetypeByID(entity);
-
             if (!archetype_entry.found_existing) {
-                const columns = self.allocator.alloc(Column, archetype.columns.len + 1) catch |err| {
-                    assert(self.archetypes.swapRemove(new_hash));
-                    return err;
-                };
+                // getOrPut allocated, so the archetype we retrieved earlier may no longer be a valid
+                // pointer. Refresh it now:
+                archetype = self.archetypeByID(entity);
+                const columns = try self.allocColumns(archetype.columns.len + 1, new_hash);
                 mem.copy(Column, columns, archetype.columns);
-                columns[columns.len - 1] = Column.init(name, @TypeOf(component));
+                columns[columns.len - 1] = Column.init(columnId, @TypeOf(component));
                 std.sort.sort(Column, columns, {}, by_alignment_name);
 
                 archetype_entry.value_ptr.* = ArchetypeStorage.init(self.allocator, columns);
-            
             }
 
             // Either new storage (if the entity moved between storage tables due to having a new
@@ -289,7 +478,7 @@ pub fn Entities(comptime TComponents: type) type {
             if (new_hash == old_hash) {
                 // Update the value of the existing component of the entity.
                 const ptr = self.entities.get(entity).?;
-                current_archetype_storage.set(ptr.row_index, name, component);
+                current_archetype_storage.set(ptr.row_index, columnId, component);
                 return;
             }
 
@@ -299,26 +488,14 @@ pub fn Entities(comptime TComponents: type) type {
             const old_ptr = self.entities.get(entity).?;
 
             // Update the storage/columns for all of the existing components on the entity.
-            current_archetype_storage.set(new_row, .id, entity);
-            for (archetype.columns) |column| {
-                if (column.name == .id) continue;
-                for (current_archetype_storage.columns) |corresponding| {
-                    if (column.name == corresponding.name) {
-                        const old_value_raw = archetype.getRaw(old_ptr.row_index, column.name);
-                        current_archetype_storage.setRaw(new_row, corresponding, old_value_raw) catch |err| {
-                            current_archetype_storage.undoAppend();
-                            return err;
-                        };
-                        break;
-                    }
-                }
-            }
+            current_archetype_storage.set(new_row, ComponentIdValue, entity);
+            archetype.copyRow(old_ptr.row_index, current_archetype_storage, new_row);
 
             // Update the storage/column for the new component.
-            current_archetype_storage.set(new_row, name, component);
+            current_archetype_storage.set(new_row, columnId, component);
 
             archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = archetype.get(old_ptr.row_index, .id, EntityID).?;
+            const swapped_entity_id = archetype.get(old_ptr.row_index, ComponentIdValue, EntityID).?;
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
@@ -330,38 +507,59 @@ pub fn Entities(comptime TComponents: type) type {
 
             return;
         }
-        
+
+        /// Sets the named component to the specified value for the given entity,
+        /// moving the entity from it's current archetype table to the new archetype
+        /// table if required.
+        pub fn setComponent(
+            self: *Self,
+            entity: EntityID,
+            comptime tag: TagType,
+            component: std.meta.fieldInfo(TComponents, tag).type,
+        ) !void {
+            return self.privSetComponent(entity, @enumToInt(tag), @TypeOf(component), component);
+        }
+
+        pub fn getPair(self: *Self, entity: EntityID, comptime firstTag: TagType, comptime secondTag: TagType) ?Pair(firstTag, secondTag) {
+            const Component = Pair(firstTag, secondTag);
+            var archetype = self.archetypeByID(entity);
+            const ptr = self.entities.get(entity).?;
+            const pairId = reflection.componentPairId(TagType, Component);
+            return archetype.get(ptr.row_index, pairId, Component);
+        }
+
         /// gets the named component of the given type (which must be correct, otherwise undefined
         /// behavior will occur). Returns null if the component does not exist on the entity.
+        /// !! not valid as name is an enum tag now ^^
         pub fn getComponent(
             self: *Self,
             entity: EntityID,
-            comptime name: TagType,
-        ) ? std.meta.fieldInfo(TComponents, name).type {
-          const Component = comptime std.meta.fieldInfo(TComponents, name).type;
-          var archetype = self.archetypeByID(entity);
+            comptime tag: TagType,
+        ) ?std.meta.fieldInfo(TComponents, tag).type {
+            const Component = comptime std.meta.fieldInfo(TComponents, tag).type;
+            var archetype = self.archetypeByID(entity);
 
-          const ptr = self.entities.get(entity).?;
-          return archetype.get(ptr.row_index, name, Component);
+            const ptr = self.entities.get(entity).?;
+            return archetype.get(ptr.row_index, @enumToInt(tag), Component);
         }
 
-        /// Removes the named component from the entity, or noop if it doesn't have such a component.
-        pub fn removeComponent(
+        fn privRemoveComponent(
             self: *Self,
             entity: EntityID,
-            comptime name: TagType,
+            columnId: ColumnIdType,
         ) !void {
             var archetype = self.archetypeByID(entity);
-            if (!archetype.hasComponent(name)) return;
+            if (!archetype.hasComponent(columnId)) return;
 
             // Determine the old hash for the archetype.
             const old_hash = archetype.hash;
 
             // Determine the new hash for the archetype with the component removed
-            var new_hash: u64 = 0;
+            var hasher = Wyhash.init(0);
             for (archetype.columns) |column| {
-                if (column.name != name) new_hash ^= std.hash_map.hashString(@tagName(column.name));
+                if (column.id != columnId) hasher.update(std.mem.asBytes(&column.id));
             }
+            var new_hash: u64 = hasher.final();
             assert(new_hash != old_hash);
 
             // Find the archetype storage this entity will move to. Note that although an entity with
@@ -372,21 +570,21 @@ pub fn Entities(comptime TComponents: type) type {
 
             // getOrPut allocated, so the archetype we retrieved earlier may no longer be a valid
             // pointer. Refresh it now:
-            archetype = self.archetypeByID(entity);
+            //archetype = self.archetypeByID(entity);
 
             if (!archetype_entry.found_existing) {
-                const columns = self.allocator.alloc(Column, archetype.columns.len - 1) catch |err| {
-                    assert(self.archetypes.swapRemove(new_hash));
-                    return err;
-                };
+                archetype = self.archetypeByID(entity);
+
+                const columns = try self.allocColumns(archetype.columns.len - 1, new_hash);
+
                 var i: usize = 0;
                 for (archetype.columns) |column| {
-                    if (column.name == name) continue;
+                    if (column.id == columnId) continue;
                     columns[i] = column;
                     i += 1;
                 }
 
-                archetype_entry.value_ptr.* = ArchetypeStorage.init(self.allocator, columns);                
+                archetype_entry.value_ptr.* = ArchetypeStorage.init(self.allocator, columns);
             }
 
             var current_archetype_storage = archetype_entry.value_ptr;
@@ -398,32 +596,29 @@ pub fn Entities(comptime TComponents: type) type {
 
             // Update the storage/columns for all of the existing components on the entity that exist in
             // the new archetype table (i.e. excluding the component to remove.)
-            current_archetype_storage.set(new_row, .id, entity);
-            for (current_archetype_storage.columns) |column| {
-                if (column.name == .id) continue;
-                for (archetype.columns) |corresponding| {
-                    if (column.name == corresponding.name) {
-                        const old_value_raw = archetype.getRaw(old_ptr.row_index, column.name);
-                        current_archetype_storage.setRaw(new_row, column, old_value_raw) catch |err| {
-                            current_archetype_storage.undoAppend();
-                            return err;
-                        };
-                        break;
-                    }
-                }
-            }
+            current_archetype_storage.set(new_row, ComponentIdValue, entity);
+            archetype.copyRow(old_ptr.row_index, current_archetype_storage, new_row);
 
             archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = archetype.get(old_ptr.row_index, .id, EntityID).?;
+            const swapped_entity_id = archetype.get(old_ptr.row_index, ComponentIdValue, EntityID).?;
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
-            
+
             try self.putEntityPointer(swapped_entity_id, old_ptr);
             try self.putEntityPointer(entity, .{
                 .archetype_index = @intCast(u16, archetype_entry.index),
                 .row_index = new_row,
             });
+        }
+
+        /// Removes the named component from the entity, or noop if it doesn't have such a component.
+        pub fn removeComponent(
+            self: *Self,
+            entity: EntityID,
+            comptime tag: TagType,
+        ) !void {
+            return self.privRemoveComponent(entity, @enumToInt(tag));
         }
 
         fn putEntityPointer(self: *Self, id: EntityID, ptr: Pointer) !void {
@@ -447,83 +642,187 @@ pub fn Entities(comptime TComponents: type) type {
     };
 }
 
+test "Pair type id" {
+    const Game = struct {
+        id: ecs.EntityID,
+        position: f32,
+        speed: f32,
+        value: i32,
+        sun: void,
+        moon: void,
+    };
+
+    const MyEntities = Entities(Game);
+
+    const VoidPairA = MyEntities.Pair(.sun, .moon);
+    const VoidPairB = MyEntities.Pair(.moon, .sun);
+
+    try std.testing.expect(reflection.typeIdValue(VoidPairA) != reflection.typeIdValue(VoidPairB));
+}
+
+test "basic" {
+    const allocator = std.testing.allocator;
+
+    const Game = struct {
+        id: ecs.EntityID,
+        position: f32,
+        value: i32,
+    };
+
+    const MyEntities = Entities(Game);
+
+    const Entry = struct {
+        position: f32,
+        value: i32,
+    };
+
+    var entities = MyEntities.init(allocator);
+    defer entities.deinit();
+
+    var entityId = try entities.create(Entry, .{ .position = 4, .value = 5 });
+
+    const componentValue = entities.getComponent(entityId, .value).?;
+    try expectEqualOf(i32, 5, componentValue);
+}
+
+test "basic Pair" {
+    const allocator = std.testing.allocator;
+
+    const Game = struct {
+        id: ecs.EntityID,
+        position: f32,
+        value: i32,
+        sun: void,
+    };
+
+    const MyEntities = Entities(Game);
+
+    var entities = MyEntities.init(allocator);
+    defer entities.deinit();
+
+    const entityId = try entities.new();
+
+    try entities.setPair(entityId, .position, .value, .{ .first = 10, .second = 22 });
+    const componentValue = entities.getPair(entityId, .position, .value).?;
+    try expectEqualOf(f32, 10, componentValue.first);
+    try expectEqualOf(i32, 22, componentValue.second);
+
+    try entities.setPair(entityId, .sun, .position, .{ .second = 22 });
+
+    const MyEntry = struct {
+        id: ecs.EntityID,
+        pair_a: MyEntities.Pair(.sun, .position),
+        pair_b: MyEntities.Pair(.sun, .value),
+        wild_c: MyEntities.Wildcard(.sun),
+    };
+
+    const ai = ArchetypeIndexes(MyEntities.TagType);
+    var aii = ai.init(allocator);
+
+    const Iter = ai.IndexIterator(MyEntry);
+
+    var it = Iter.init(&aii);
+    _ = it;
+    //try it.next();
+}
+
 test "ecc" {
-  const Game = struct {
-    id: ecs.EntityID,
-    location: f32,
-    name: []const u8,
-    rotation: u32,
-  };
-  //const Tags = reflection.ToEnum(myGame);
-  const MyStorage = Entities(Game);
-  const allocator = std.testing.allocator;
-  //const Column = MyStorage.Column;
-  //const columns = try allocator.alloc(Column, 1);
-  //columns[0] = Column.init(.id, EntityID);
-  const Entry = struct {
-    rotation: u32,
-  };
+    const Sub = struct {
+        x: f32 = 0,
+        y: f32 = 0,
+    };
 
-  const EntryWithId = struct {
-    id: ecs.EntityID,
-    location: f32
-  };
-  
-  var b = MyStorage.init(allocator);
-  defer b.deinit();
-  var e2 = try b.create(Entry, .{ .rotation = 75 });  
-  var exx = try b.create(EntryWithId, .{ .id = 777, .location = 25 });
-  try expectEqualOf(ecs.EntityID, 777, exx);
-  //var ccc = b.getComponent(e2, .rotation);
-  try expectEqualOf(u32, 75, b.getComponent(e2, .rotation).?);
-  //try expectEqualOf(i32, 75, b.getComponent(e2, .rotation).?);
-  var e = try b.new();
-  try b.setComponent(e, .rotation, 42);
+    const Game = struct {
+        id: ecs.EntityID,
+        location: f32,
+        name: []const u8,
+        rotation: u32,
+        value: i32,
+        ChildOf: void,
+        Sun: void,
+        Moon: void,
+        sub: Sub,
+    };
+    const MyStorage = Entities(Game);
+    const allocator = std.testing.allocator;
+    const Entry = struct {
+        rotation: u32,
+    };
 
-  const Enemy = struct {
-    location: f32,
-    rotation: i32
-  };
+    const EntryWithId = struct { id: ecs.EntityID, location: f32 };
 
+    var b = MyStorage.init(allocator);
+    defer b.deinit();
 
-  
-  const Result = struct {
-    rotation: *u32
-  };
-  std.debug.print("e2 id: {} -> {}\n", .{ e2, e });
-  //var Iter = MyStorage.Iter(&.{ .rotation });
-  
-  
-  var iter = b.getIterator(Result);
-  var val = b.getComponent(e, .rotation);
-  try std.testing.expect(val != null);
-  try std.testing.expect(val.? == 42);
+    var e2 = try b.create(Entry, .{ .rotation = 75 });
 
-  iter.next().?.rotation.* = 123;
-  var val2 = b.getComponent(e2, .rotation).?;
-  try std.testing.expectEqual(val2, 123);
+    try expectEqualOf(u32, 75, b.getComponent(e2, .rotation).?);
 
-  var entry = iter.next();
-  try std.testing.expect(entry != null);
-  try std.testing.expect(entry.?.rotation.* == 42);
- 
-  // //try std.testing.expect(iter.next().?.get(Entry).?.rotation == 42);
-  try std.testing.expect(iter.next() == null);
-   
-  var e3 = try b.create(Enemy, .{ .location = 22, .rotation = 55 });
-  _ = e3;
-  try b.removeComponent(e, .rotation);
-  val = b.getComponent(e, .rotation);
-  try std.testing.expect(val == null);
-  try b.remove(e);
+    var e = try b.new();
+    try b.setComponent(e, .rotation, 42);
+
+    const Enemy = struct { location: f32, rotation: i32 };
+
+    const Result = struct { rotation: *u32 };
+    std.debug.print("e2 id: {} -> {}\n", .{ e2, e });
+
+    var iter = b.getIterator(Result);
+    var val = b.getComponent(e, .rotation);
+    try std.testing.expect(val != null);
+    try std.testing.expect(val.? == 42);
+
+    iter.next().?.rotation.* = 123;
+    var val2 = b.getComponent(e2, .rotation).?;
+    try std.testing.expectEqual(val2, 123);
+
+    var entry = iter.next();
+    try std.testing.expect(entry != null);
+    try std.testing.expect(entry.?.rotation.* == 42);
+
+    try std.testing.expect(iter.next() == null);
+
+    var e3 = try b.create(Enemy, .{ .location = 22, .rotation = 55 });
+    _ = e3;
+    try b.removeComponent(e, .rotation);
+    val = b.getComponent(e, .rotation);
+    try std.testing.expect(val == null);
+    try b.remove(e);
+
+    var exx = try b.create(EntryWithId, .{ .id = 777, .location = 25 });
+    try expectEqualOf(ecs.EntityID, 777, exx);
 }
 
 fn expectEqualOf(comptime T: type, expected: T, actual: T) !void {
-  return std.testing.expectEqual(expected, actual);
+    return std.testing.expectEqual(expected, actual);
 }
 
-// pub fn Iter(comptime components: []const TagType) type {            
-    
+// test "Pair Pair Pair" {
+//     const Game = struct {
+//         id: ecs.EntityID,
+//         location: f32,
+//         name: []const u8,
+//         rotation: u32,
+//         value: i32,
+//         ChildOf: void,
+//         Sun: void,
+//         Moon: void,
+//         _Pair: void,
+//     };
+//     const MyEntites = Entities(Game);
+//     const allocator = std.testing.allocator;
+
+//     const Entry = struct {
+//         rotation: u32,
+//     };
+
+//     _ = Entry;
+
+//     var entities = MyEntites.init(allocator);
+//     defer entities.deinit();
+// }
+
+// pub fn Iter(comptime components: []const TagType) type {
+
 //     return struct {
 //         entities: *Self,
 //         archetype_index: usize = 0,
@@ -535,8 +834,8 @@ fn expectEqualOf(comptime T: type, expected: T, actual: T) !void {
 //             entity: EntityID,
 //             entities: *Self,
 
-//             pub fn get(e: Entry, comptime T: type) ?T { 
-//                 var et = e.entities;                   
+//             pub fn get(e: Entry, comptime T: type) ?T {
+//                 var et = e.entities;
 //                 const ptr = et.entities.get(e.entity).?;
 //                 var archetype = et.archetypeByID(e.entity);
 //                 return archetype.getInto(ptr.row_index, T);
@@ -548,7 +847,7 @@ fn expectEqualOf(comptime T: type, expected: T, actual: T) !void {
 //             // If the archetype table we're looking at does not contain the components we're
 //             // querying for, keep searching through tables until we find one that does.
 //             var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
-//             while (!hasComponents(archetype, components) or iter.row_index >= archetype.len) {                        
+//             while (!hasComponents(archetype, components) or iter.row_index >= archetype.len) {
 //                 iter.archetype_index += 1;
 //                 iter.row_index = 0;
 //                 if (iter.archetype_index >= entities.archetypes.count()) {
@@ -556,7 +855,7 @@ fn expectEqualOf(comptime T: type, expected: T, actual: T) !void {
 //                 }
 //                 archetype = entities.archetypes.entries.get(iter.archetype_index).value;
 //             }
-            
+
 //             const row_entity_id = archetype.get(iter.row_index, .id, EntityID).?;
 //             iter.row_index += 1;
 //             return Entry{ .entity = row_entity_id, .entities = iter.entities };

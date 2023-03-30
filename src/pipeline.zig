@@ -52,6 +52,7 @@ test "Pipeline" {
     location: f32,
     name: []const u8,
     rotation: u32,
+    _Pair: void,
   };
 
   const MyStorage = ecs.Entities(Game);
