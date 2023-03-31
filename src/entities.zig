@@ -257,7 +257,6 @@ pub fn Entities(comptime TComponents: type) type {
 
         const Self = @This();
         pub const TagType: type = std.meta.FieldEnum(TComponents);
-        //pub const Tag: type = reflection.MakeExhausive(TagType, u16);
 
         const ColumnIdType = usize;
         const ArchetypeStorage = ecs.ArchetypeStorage(ColumnIdType, TagType);

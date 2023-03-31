@@ -14,67 +14,6 @@ pub fn typeIdValue(comptime T: type) usize {
     }.x);
 }
 
-// pub fn getComponentId_v2(comptime TagType: type, comptime fieldType: type, comptime fieldName: []const u8) usize {
-//     const existingTag = comptime std.meta.stringToEnum(TagType, fieldName);
-//     if (existingTag) |tag| return @enumToInt(tag);
-//     return switch (getSpecial(TagType, fieldType)) {
-//         .Pair => componentPairId(TagType, fieldType),
-//         .Wildcard => componentPairId(TagType, fieldType) | highBit,
-//         .Component => unreachable,
-//         .Invalid => unreachable,
-//     };
-//     //return componentPairId(TagType, fieldType);
-// }
-
-// pub fn getComponentId(comptime TagType: type, comptime fieldType: type, comptime fieldName: []const u8) usize {
-//     const existingTag = comptime std.meta.stringToEnum(TagType, fieldName);
-//     if (existingTag) |tag| return @enumToInt(tag);
-//     return switch (getSpecial(TagType, fieldType)) {
-//         .Pair => componentPairId(TagType, fieldType),
-//         .Wildcard => componentPairId(TagType, fieldType) | highBit,
-//         .Component => unreachable,
-//         .Invalid => unreachable,
-//     };
-//     //return componentPairId(TagType, fieldType);
-// }
-
-pub fn getSpecial(comptime TagType: type, comptime fieldType: type) Special {
-    _ = TagType;
-    const type_info: std.builtin.Type = @typeInfo(fieldType);
-    if (type_info != .Struct) return .Invalid;
-    const type_struct = type_info.Struct;
-    if (type_struct.fields.len != 2) return .Invalid;
-    if (@hasDecl(fieldType, "tag")) {
-        //if (@TypeOf(@field(fieldType, "tag")) != TagType) return .Invalid;
-        return .Wildcard;
-    }
-    if (@hasDecl(fieldType, "firstTag") and @hasDecl(fieldType, "secondTag")) {
-        return .Pair;
-    }
-    return .Invalid;
-}
-
-pub const Special = enum { Component, Pair, Wildcard, Invalid };
-
-// pub const highBit: usize = @intCast(usize, 1 << 63);
-
-// pub fn componentPairId(comptime Tag: type, comptime field_type: type) usize {
-//     const pairId: usize = std.meta.fields(Tag).len + typeIdValue(field_type);
-//     std.debug.assert(pairId & highBit != highBit);
-//     return pairId;
-// }
-
-// pub fn extractComponentIds(comptime ValueT: type, comptime TagType: type) []const usize {
-//     return Blk: {
-//         const fields = std.meta.fields(ValueT);
-//         var tags: [fields.len]usize = undefined;
-//         inline for (fields, 0..) |f, i| {
-//             tags[i] = comptime getComponentId(TagType, f.type, f.name);
-//         }
-//         break :Blk tags[0..];
-//     };
-// }
-
 pub fn ToEnum(comptime components: anytype) type {
     return Blk: {
         const fields = std.meta.fields(@TypeOf(components));
@@ -99,14 +38,14 @@ pub fn ToEnum(comptime components: anytype) type {
 pub fn ToEnumFromNames(comptime names: []const []const u8) type {
     //const Type = std.builtin.Type;
     return Blk: {
-        var tags: [names.len]Type.EnumField = undefined;
+        var tags: [names.len]std.builtin.EnumField = undefined;
         inline for (names, 0..) |name, i| {
             tags[i] = .{
                 .name = name,
                 .value = i,
             };
         }
-        const type_info = Type{ .Enum = .{
+        const type_info = std.builtin.Type{ .Enum = .{
             .tag_type = std.math.IntFittingRange(0, names.len - 1),
             .fields = &tags,
             .decls = &.{},
@@ -336,68 +275,68 @@ fn getDeclsFn(comptime T: type) []const Entry {
 
 // --------------------------------- //
 
-pub fn Custom_FieldType(comptime T: type, comptime field: Custom_FieldEnum(T)) type {
-    if (@typeInfo(T) != .Struct and @typeInfo(T) != .Union) {
-        @compileError("Expected struct or union, found '" ++ @typeName(T) ++ "'");
-    }
+// pub fn Custom_FieldType(comptime T: type, comptime field: Custom_FieldEnum(T)) type {
+//     if (@typeInfo(T) != .Struct and @typeInfo(T) != .Union) {
+//         @compileError("Expected struct or union, found '" ++ @typeName(T) ++ "'");
+//     }
 
-    return custom_fieldInfo(T, field).type;
-}
+//     return custom_fieldInfo(T, field).type;
+// }
 
-const Type = std.builtin.Type;
+// const Type = std.builtin.Type;
 
-pub fn custom_fieldInfo(comptime T: type, comptime field: Custom_FieldEnum(T)) switch (@typeInfo(T)) {
-    .Struct => Type.StructField,
-    else => @compileError("Expected struct, union, error set or enum type, found '" ++ @typeName(T) ++ "'"),
-} {
-    return std.meta.fields(T)[@enumToInt(field)];
-}
+// pub fn custom_fieldInfo(comptime T: type, comptime field: Custom_FieldEnum(T)) switch (@typeInfo(T)) {
+//     .Struct => Type.StructField,
+//     else => @compileError("Expected struct, union, error set or enum type, found '" ++ @typeName(T) ++ "'"),
+// } {
+//     return std.meta.fields(T)[@enumToInt(field)];
+// }
 
-pub fn MakeExhausive(comptime T: type, comptime S: type) type {
-    const oldEnum = std.meta.FieldEnum(T);
-    const fields = std.meta.fields(oldEnum);
-    return @Type(.{
-        .Enum = .{
-            .tag_type = S,
-            .fields = fields,
-            .decls = &.{},
-            .is_exhaustive = true,
-        },
-    });
-}
+// pub fn MakeExhausive(comptime T: type, comptime S: type) type {
+//     const oldEnum = std.meta.FieldEnum(T);
+//     const fields = std.meta.fields(oldEnum);
+//     return @Type(.{
+//         .Enum = .{
+//             .tag_type = S,
+//             .fields = fields,
+//             .decls = &.{},
+//             .is_exhaustive = true,
+//         },
+//     });
+// }
 
 /// Returns an enum with a variant named after each field of `T`.
-pub fn Custom_FieldEnum(comptime T: type) type {
-    const field_infos = std.meta.fields(T);
+// pub fn Custom_FieldEnum(comptime T: type) type {
+//     const field_infos = std.meta.fields(T);
 
-    if (field_infos.len == 0) {
-        return @Type(.{
-            .Enum = .{
-                .tag_type = u0,
-                .fields = &.{},
-                .decls = &.{},
-                .is_exhaustive = true,
-            },
-        });
-    }
+//     if (field_infos.len == 0) {
+//         return @Type(.{
+//             .Enum = .{
+//                 .tag_type = u0,
+//                 .fields = &.{},
+//                 .decls = &.{},
+//                 .is_exhaustive = true,
+//             },
+//         });
+//     }
 
-    var enumFields: [field_infos.len]std.builtin.Type.EnumField = undefined;
-    var decls = [_]std.builtin.Type.Declaration{};
-    inline for (field_infos, 0..) |field, i| {
-        enumFields[i] = .{
-            .name = field.name,
-            .value = i,
-        };
-    }
-    return @Type(.{
-        .Enum = .{
-            .tag_type = u32,
-            .fields = &enumFields,
-            .decls = &decls,
-            .is_exhaustive = false,
-        },
-    });
-}
+//     var enumFields: [field_infos.len]std.builtin.Type.EnumField = undefined;
+//     var decls = [_]std.builtin.Type.Declaration{};
+//     inline for (field_infos, 0..) |field, i| {
+//         enumFields[i] = .{
+//             .name = field.name,
+//             .value = i,
+//         };
+//     }
+//     return @Type(.{
+//         .Enum = .{
+//             .tag_type = u32,
+//             .fields = &enumFields,
+//             .decls = &decls,
+//             .is_exhaustive = false,
+//         },
+//     });
+// }
 
 pub fn Pair(comptime A: type, comptime B: type, comptime Tag: type, comptime tagA: Tag, comptime tagB: Tag) type {
     if (A == void and B == void) return struct {
