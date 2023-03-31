@@ -14,17 +14,29 @@ pub fn typeIdValue(comptime T: type) usize {
     }.x);
 }
 
-pub fn getComponentId(comptime TagType: type, comptime fieldType: type, comptime fieldName: []const u8) usize {
-    const existingTag = comptime std.meta.stringToEnum(TagType, fieldName);
-    if (existingTag) |tag| return @enumToInt(tag);
-    return switch (getSpecial(TagType, fieldType)) {
-        .Pair => componentPairId(TagType, fieldType),
-        .Wildcard => componentPairId(TagType, fieldType) | highBit,
-        .Component => unreachable,
-        .Invalid => unreachable,
-    };
-    //return componentPairId(TagType, fieldType);
-}
+// pub fn getComponentId_v2(comptime TagType: type, comptime fieldType: type, comptime fieldName: []const u8) usize {
+//     const existingTag = comptime std.meta.stringToEnum(TagType, fieldName);
+//     if (existingTag) |tag| return @enumToInt(tag);
+//     return switch (getSpecial(TagType, fieldType)) {
+//         .Pair => componentPairId(TagType, fieldType),
+//         .Wildcard => componentPairId(TagType, fieldType) | highBit,
+//         .Component => unreachable,
+//         .Invalid => unreachable,
+//     };
+//     //return componentPairId(TagType, fieldType);
+// }
+
+// pub fn getComponentId(comptime TagType: type, comptime fieldType: type, comptime fieldName: []const u8) usize {
+//     const existingTag = comptime std.meta.stringToEnum(TagType, fieldName);
+//     if (existingTag) |tag| return @enumToInt(tag);
+//     return switch (getSpecial(TagType, fieldType)) {
+//         .Pair => componentPairId(TagType, fieldType),
+//         .Wildcard => componentPairId(TagType, fieldType) | highBit,
+//         .Component => unreachable,
+//         .Invalid => unreachable,
+//     };
+//     //return componentPairId(TagType, fieldType);
+// }
 
 pub fn getSpecial(comptime TagType: type, comptime fieldType: type) Special {
     _ = TagType;
@@ -44,24 +56,24 @@ pub fn getSpecial(comptime TagType: type, comptime fieldType: type) Special {
 
 pub const Special = enum { Component, Pair, Wildcard, Invalid };
 
-pub const highBit: usize = @intCast(usize, 1 << 63);
+// pub const highBit: usize = @intCast(usize, 1 << 63);
 
-pub fn componentPairId(comptime Tag: type, comptime field_type: type) usize {
-    const pairId: usize = std.meta.fields(Tag).len + typeIdValue(field_type);
-    std.debug.assert(pairId & highBit != highBit);
-    return pairId;
-}
+// pub fn componentPairId(comptime Tag: type, comptime field_type: type) usize {
+//     const pairId: usize = std.meta.fields(Tag).len + typeIdValue(field_type);
+//     std.debug.assert(pairId & highBit != highBit);
+//     return pairId;
+// }
 
-pub fn extractComponentIds(comptime ValueT: type, comptime TagType: type) []const usize {
-    return Blk: {
-        const fields = std.meta.fields(ValueT);
-        var tags: [fields.len]usize = undefined;
-        inline for (fields, 0..) |f, i| {
-            tags[i] = comptime getComponentId(TagType, f.type, f.name);
-        }
-        break :Blk tags[0..];
-    };
-}
+// pub fn extractComponentIds(comptime ValueT: type, comptime TagType: type) []const usize {
+//     return Blk: {
+//         const fields = std.meta.fields(ValueT);
+//         var tags: [fields.len]usize = undefined;
+//         inline for (fields, 0..) |f, i| {
+//             tags[i] = comptime getComponentId(TagType, f.type, f.name);
+//         }
+//         break :Blk tags[0..];
+//     };
+// }
 
 pub fn ToEnum(comptime components: anytype) type {
     return Blk: {
@@ -389,27 +401,27 @@ pub fn Custom_FieldEnum(comptime T: type) type {
 
 pub fn Pair(comptime A: type, comptime B: type, comptime Tag: type, comptime tagA: Tag, comptime tagB: Tag) type {
     if (A == void and B == void) return struct {
-        const firstTag: Tag = tagA;
-        const secondTag: Tag = tagB;
-        first: A = {},
-        second: B = {},
+        pub const key_tag: Tag = tagA;
+        pub const value_tag: Tag = tagB;
+        key: A = {},
+        value: B = {},
     };
     if (A == void) return struct {
-        const firstTag: Tag = tagA;
-        const secondTag: Tag = tagB;
-        first: A = {},
-        second: B,
+        pub const key_tag: Tag = tagA;
+        pub const value_tag: Tag = tagB;
+        key: A = {},
+        value: B,
     };
     if (B == void) return struct {
-        const firstTag: Tag = tagA;
-        const secondTag: Tag = tagB;
-        first: A,
-        second: B = {},
+        pub const key_tag: Tag = tagA;
+        pub const value_tag: Tag = tagB;
+        key: A,
+        value: B = {},
     };
     return struct {
-        const firstTag: Tag = tagA;
-        const secondTag: Tag = tagB;
-        first: A,
-        second: B,
+        pub const key_tag: Tag = tagA;
+        pub const value_tag: Tag = tagB;
+        key: A,
+        value: B,
     };
 }

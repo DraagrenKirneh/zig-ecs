@@ -71,6 +71,7 @@ pub fn ArchetypeStorage(comptime ColumnId: type, comptime ComponentTag: type) ty
 
         const Self = @This();
 
+        const PackedColumnId = @import("entities.zig").PackedComponentId(ComponentTag);
         pub const Column = CreateColumn(ColumnId);
         /// Calculates the storage.hash value. This is a hash of all the component names, and can
         /// effectively be used to uniquely identify this table within the database.
@@ -198,12 +199,11 @@ pub fn ArchetypeStorage(comptime ColumnId: type, comptime ComponentTag: type) ty
         pub fn setRow(storage: *Self, row_index: u32, row: anytype) void {
             //if (is_debug) storage.debugValidateRow(row);
             const RowType = @TypeOf(row);
-            const fields = std.meta.fields(RowType);
-            inline for (fields) |field| {
+            inline for (std.meta.fields(RowType)) |field| {
                 const ColumnType = field.type;
                 if (@sizeOf(ColumnType) == 0) continue;
 
-                const columnId = reflection.getComponentId(ComponentTag, field.type, field.name);
+                const columnId = PackedColumnId.fromType(field.type, field.name);
                 loop: for (storage.columns) |column| {
                     if (column.id != columnId) continue :loop;
                     const columnValues = @ptrCast([*]ColumnType, @alignCast(@alignOf(ColumnType), &storage.block[column.offset]));
