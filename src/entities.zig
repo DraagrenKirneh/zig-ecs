@@ -325,11 +325,11 @@ pub fn Entities(comptime TComponents: type) type {
             return std.meta.fieldInfo(TComponents, tag).type;
         }
 
-        pub fn Pair(comptime First: TagType, comptime Second: TagType) type {
-            const TF = tagType(First);
-            const TS = tagType(Second);
+        pub fn Pair(comptime key_tag: TagType, comptime value_tag: TagType) type {
+            const TF = tagType(key_tag);
+            const TS = tagType(value_tag);
 
-            return reflection.Pair(TF, TS, TagType, First, Second);
+            return reflection.Pair(TF, TS, TagType, key_tag, value_tag);
         }
 
         fn WildcardValueIterator(comptime Key_tag: TagType) type {
@@ -628,13 +628,13 @@ pub fn Entities(comptime TComponents: type) type {
         pub fn setPair(
             self: *Self,
             entity: EntityID,
-            comptime firstTag: TagType,
-            comptime secondTag: TagType,
-            component: Pair(firstTag, secondTag),
+            comptime key_tag: TagType,
+            comptime value_tag: TagType,
+            component: Pair(key_tag, value_tag),
         ) !void {
-            const Component = Pair(firstTag, secondTag);
+            const Component = Pair(key_tag, value_tag);
             std.debug.print("\nSet Pair: {s}, {d} xyz\n", .{ @typeName(Component), @sizeOf(Component) });
-            const pairId = PackedColumnId.pairId(firstTag, secondTag);
+            const pairId = PackedColumnId.pairId(key_tag, value_tag);
             //const pairId: usize = reflection.componentPairId(TagType, Component);
             return self.privSetComponent(entity, pairId, Component, component);
         }
@@ -992,7 +992,6 @@ test "pair n wildcard" {
     try std.testing.expect(result.?.value == 0);
 
     try entities.setPair(entity_id, .inventory, .cake, .{ .value = 999 });
-
     result = entities.getPair(entity_id, .inventory, .cake);
     try std.testing.expect(result.?.value == 999);
 
@@ -1004,8 +1003,10 @@ test "pair n wildcard" {
     var iterator = entities.getIterator(Query);
 
     const query_result: Query = iterator.next().?;
+    var wildcard_value_it = query_result.planet_wildcard.value_iterator;
 
     //try expectEqual(type, void, query_result.planet_wildcard.key);
+    _ = wildcard_value_it;
 
     var count: usize = 0;
     var value_it = query_result.planet_wildcard.value_iterator;
