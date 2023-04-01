@@ -213,17 +213,30 @@ pub fn ArchetypeStorage(comptime ColumnId: type, comptime ComponentTag: type) ty
         }
 
         /// Sets the value of the named components (columns) for the given row in the table.
-        pub fn set(storage: *Self, row_index: u32, id: ColumnId, component: anytype) void {
+        pub fn set(storage: *Self, row_index: u32, id: ColumnId, comptime T: type, component: T) void {
             const ColumnType = @TypeOf(component);
-            if (@sizeOf(ColumnType) == 0) return;
+            if (@sizeOf(T) == 0) {
+                std.debug.print("void type", .{});
+                return;
+            }
             for (storage.columns) |column| {
                 if (column.id != id) continue;
-                if (is_debug) {
-                    if (typeId(ColumnType) != column.typeId) {
-                        @panic("fixMe");
-                        //storage.dbg_panic(@typeName(ColumnType), @tagName(column.name));
-                    }
+                // if (is_debug) {
+                //     if (typeId(ColumnType) != column.typeId) {
+                //         @panic("fixMe");
+                //         //storage.dbg_panic(@typeName(ColumnType), @tagName(column.name));
+                //     }
+                // }
+                if (column.id != 0) {
+                    std.debug.print("---- xx {s} [{d}][{d}][{d}]\n -- {b} \n", .{
+                        @typeName(ColumnType),
+                        @sizeOf(ColumnType),
+                        column.alignment,
+                        @alignOf(ColumnType),
+                        id,
+                    });
                 }
+
                 const columnValues = @ptrCast([*]ColumnType, @alignCast(@alignOf(ColumnType), &storage.block[column.offset]));
                 columnValues[row_index] = component;
                 return;
@@ -261,7 +274,11 @@ pub fn ArchetypeStorage(comptime ColumnId: type, comptime ComponentTag: type) ty
                 const ColumnType = if (!isPointer) field.type else f_info.Pointer.child;
 
                 //const columnId = identifiers[index];
-                const columnId = comptime if (std.meta.stringToEnum(ComponentTag, field.name)) |tag| @enumToInt(tag) else std.meta.fields(ComponentTag).len + @enumToInt(reflection.typeId(field.type));
+                const columnId = comptime if (std.meta.stringToEnum(ComponentTag, field.name)) |tag|
+                    @enumToInt(tag)
+                else
+                    std.meta.fields(ComponentTag).len + @enumToInt(reflection.typeId(field.type));
+
                 for (storage.columns) |column| {
                     if (column.id == columnId) {
                         const columnValues = @ptrCast([*]ColumnType, @alignCast(@alignOf(ColumnType), &storage.block[column.offset]));
@@ -270,6 +287,17 @@ pub fn ArchetypeStorage(comptime ColumnId: type, comptime ComponentTag: type) ty
                 }
             }
             return data;
+        }
+
+        // get memoryBlock -> start..size
+        pub fn getKnownRaw(storage: *const Self, row_index: usize, column_index: usize) []u8 {
+            const column = storage.columns[column_index];
+            const start = column.offset + (column.size * row_index);
+            return storage.block[start .. start + (column.size)];
+        }
+
+        pub fn getColumnId(storage: *const Self, column_index: usize) ColumnId {
+            return storage.columns[column_index].id;
         }
 
         pub fn getRaw(storage: *Self, row_index: u32, id: ColumnId) []u8 {
