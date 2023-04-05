@@ -11,10 +11,6 @@ const Wyhash = std.hash.Wyhash;
 const assert = std.debug.assert;
 
 const EntityID = ecs.EntityID;
-//const ArchetypeStorage = storage.ArchetypeStorage;
-const void_archetype_hash = ecs.void_archetype_hash;
-
-const ArchetypeId = u64;
 
 const trait = std.meta.trait;
 

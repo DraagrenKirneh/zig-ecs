@@ -16,10 +16,6 @@ pub const EventHandler = @import("events.zig").EventHandler;
 
 pub const math = @import("math/math.zig");
 
-const reflection = @import("reflection.zig");
-//pub const TypeId = reflection.TypeId;
-//pub const typeId = reflection.typeId;
-
 test {
     @import("std").testing.refAllDecls(@This());
 }

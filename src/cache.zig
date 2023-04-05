@@ -1,9 +1,22 @@
 const std = @import("std");
 const testing = std.testing;
-const typeId = @import("typeId.zig");
+
+const TypeId = enum(usize) { _ };
+
+// typeId implementation by Felix "xq" Queißner
+fn typeId(comptime T: type) TypeId {
+    return @intToEnum(TypeId, typeIdValue(T));
+}
+
+fn typeIdValue(comptime T: type) usize {
+    _ = T;
+    return @ptrToInt(&struct {
+        var x: u8 = 0;
+    }.x);
+}
 
 pub const PointerCache = struct {
-    const Map = std.AutoArrayHashMap(typeId.TypeId, usize);
+    const Map = std.AutoArrayHashMap(TypeId, usize);
     map: Map,
 
     const Self = @This();
@@ -16,7 +29,7 @@ pub const PointerCache = struct {
     }
 
     pub fn get(self: *const Self, comptime Key: type, comptime T: type) ?*T {
-        var data = self.map.get(typeId.typeId(Key));
+        var data = self.map.get(typeId(Key));
         if (data) |bytes| {
             return @intToPtr(*T, bytes);
         }
@@ -24,12 +37,12 @@ pub const PointerCache = struct {
     }
 
     pub fn set(self: *Self, comptime Key: type, comptime T: type, value: *T) !void {
-        try self.map.put(typeId.typeId(Key), @ptrToInt(value));
+        try self.map.put(typeId(Key), @ptrToInt(value));
     }
 };
 
 pub const ObjectCache = struct {
-    const Map = std.AutoArrayHashMap(typeId.TypeId, []u8);
+    const Map = std.AutoArrayHashMap(TypeId, []u8);
     map: Map,
 
     const Self = @This();
@@ -42,7 +55,7 @@ pub const ObjectCache = struct {
     }
 
     pub fn get(self: *const Self, comptime T: type) ?*T {
-        var data = self.map.get(typeId.typeId(T));
+        var data = self.map.get(typeId(T));
         if (data) |bytes| {
             return std.mem.bytesAsValue(T, @alignCast(@alignOf(T), bytes[0..@sizeOf(T)]));
         }
@@ -51,7 +64,7 @@ pub const ObjectCache = struct {
 
     pub fn set(self: *Self, comptime T: type, value: *T) !void {
         var bytes = std.mem.asBytes(value);
-        try self.map.put(typeId.typeId(T), bytes[0..]);
+        try self.map.put(typeId(T), bytes[0..]);
     }
 };
 

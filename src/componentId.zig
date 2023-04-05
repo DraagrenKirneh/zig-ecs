@@ -1,5 +1,7 @@
 const std = @import("std");
 
+// @Fixme file better name / split
+
 const Field = std.builtin.Type.StructField;
 
 pub const EntityId = u64;
@@ -31,6 +33,7 @@ pub const EntityIdFields = packed struct {
     }
 };
 
+// @Fixme better name
 pub const EntityIdProvider = struct {
     const List = std.ArrayListUnmanaged(u64);
 
