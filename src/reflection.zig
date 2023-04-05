@@ -1,40 +1,5 @@
 const std = @import("std");
 
-pub const TypeId = enum(usize) { _ };
-
-// typeId implementation by Felix "xq" Queißner
-pub fn typeId(comptime T: type) TypeId {
-    return @intToEnum(TypeId, typeIdValue(T));
-}
-
-pub fn typeIdValue(comptime T: type) usize {
-    _ = T;
-    return @ptrToInt(&struct {
-        var x: u8 = 0;
-    }.x);
-}
-
-pub fn ToEnum(comptime components: anytype) type {
-    return Blk: {
-        const fields = std.meta.fields(@TypeOf(components));
-        var tags: [fields.len + 1]std.builtin.Type.EnumField = undefined;
-        tags[0] = .{ .name = "id", .value = 0 };
-        inline for (fields, 0..) |f, i| {
-            tags[i + 1] = .{
-                .name = f.name,
-                .value = i + 1,
-            };
-        }
-        const type_info = std.builtin.Type{ .Enum = .{
-            .tag_type = u32,
-            .fields = &tags,
-            .decls = &.{},
-            .is_exhaustive = true,
-        } };
-        break :Blk @Type(type_info);
-    };
-}
-
 pub fn ToEnumFromNames(comptime names: []const []const u8) type {
     //const Type = std.builtin.Type;
     return Blk: {
@@ -75,40 +40,6 @@ pub fn EnumFromType(comptime T: type) type {
         } };
         break :Blk @Type(type_info);
     };
-}
-
-pub fn extract(comptime ValueT: type, comptime TagType: type) []const TagType {
-    return Blk: {
-        const fields = std.meta.fields(ValueT);
-        var tags: [fields.len]TagType = undefined;
-        inline for (fields, 0..) |f, i| {
-            //tags[i] = comptime std.meta.stringToEnum(TagType, f.name).?;
-            tags[i] = @field(TagType, f.name);
-        }
-        break :Blk tags[0..];
-    };
-}
-
-pub fn typesToHolder(comptime types: []const type) type {
-    var fields: [types.len]std.builtin.Type.StructField = undefined;
-    inline for (types, 0..) |t, index| {
-        //const t_info_optional = std.builtin.TypeInfo { .Optional = .{ .child = t } };
-        fields[index] = .{
-            .name = t.name,
-            .type = t, //@Type(t_info_optional),
-            .default_value = null,
-            .is_comptime = false,
-            .alignment = if (@sizeOf(t) > 0) @alignOf(t) else 0,
-        };
-    }
-    return @Type(.{
-        .Struct = .{
-            .is_tuple = false,
-            .layout = .Auto,
-            .decls = &.{},
-            .fields = &fields,
-        },
-    });
 }
 
 pub fn ComponentUnion(comptime T: type) type {
@@ -164,16 +95,6 @@ pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) 
             },
         };
         break :blk @Type(type_info);
-    };
-}
-
-pub fn typehash(comptime T: type) u64 {
-    return blk: {
-        var hash: u64 = std.math.maxInt(u64);
-        for (std.meta.fieldNames(T)) |name| {
-            hash ^= std.hash_map.hashString(name);
-        }
-        break :blk hash;
     };
 }
 
@@ -274,25 +195,25 @@ fn getDeclsFn(comptime T: type) []const Entry {
 }
 
 pub fn Pair(comptime A: type, comptime B: type, comptime Tag: type, comptime tagA: Tag, comptime tagB: Tag) type {
-    if (A == void and B == void) return struct {
+    if (A == void and B == void) return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
         key: A = {},
         value: B = {},
     };
-    if (A == void) return struct {
+    if (A == void) return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
         key: A = {},
         value: B,
     };
-    if (B == void) return struct {
+    if (B == void) return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
         key: A,
         value: B = {},
     };
-    return struct {
+    return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
         key: A,

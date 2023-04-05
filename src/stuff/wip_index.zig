@@ -127,3 +127,90 @@
 //         }
 //     };
 // }
+
+// pub fn extract(comptime ValueT: type, comptime TagType: type) []const TagType {
+//     return Blk: {
+//         const fields = std.meta.fields(ValueT);
+//         var tags: [fields.len]TagType = undefined;
+//         inline for (fields, 0..) |f, i| {
+//             //tags[i] = comptime std.meta.stringToEnum(TagType, f.name).?;
+//             tags[i] = @field(TagType, f.name);
+//         }
+//         break :Blk tags[0..];
+//     };
+// }
+
+// pub fn TypedIter2(comptime T: type, comptime E: type) type {
+//     return struct {
+//         entities: *const E,
+//         archetype_index: usize = 0,
+//         row_index: u32 = 0,
+
+//         const Iterator = @This();
+//         const Components = extractComponentIds(T);
+//         const isSimple = blk: {
+//             inline for (Components) |cid| {
+//                 if (cid >= PackedColumnId.WildcardMask) break :blk false;
+//             }
+//             break :blk true;
+//         };
+
+//         pub fn init(entities: *const E) Iterator {
+//             var iterator = Iterator{
+//                 .entities = entities,
+//             };
+
+//             return iterator;
+//         }
+
+//         pub fn simpleNext(iter: *Iterator) ?T {
+//             const entities = iter.entities;
+//             // If the archetype table we're looking at does not contain the components we're
+//             // querying for, keep searching through tables until we find one that does.
+//             var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+//             while (!hasComponents(archetype, Components) or iter.row_index >= archetype.len) {
+//                 iter.archetype_index += 1;
+//                 iter.row_index = 0;
+//                 if (iter.archetype_index >= entities.archetypes.count()) {
+//                     return null;
+//                 }
+//                 archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+//             }
+
+//             var row_index = iter.row_index;
+//             iter.row_index += 1;
+//             return archetype.getInto(row_index, T);
+//         }
+
+//         pub fn advancedNext(iter: *Iterator) ?T {
+//             const entities = iter.entities;
+//             // If the archetype table we're looking at does not contain the components we're
+//             // querying for, keep searching through tables until we find one that does.
+//             var archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+
+//             while (!hasComponents(archetype, Components) or iter.row_index >= archetype.len) {
+//                 iter.archetype_index += 1;
+//                 iter.row_index = 0;
+//                 if (iter.archetype_index >= entities.archetypes.count()) {
+//                     return null;
+//                 }
+//                 archetype = entities.archetypes.entries.get(iter.archetype_index).value;
+//             }
+
+//             var row_index = iter.row_index;
+//             iter.row_index += 1;
+//             var res = archetype.getInto(row_index, T);
+//             inline for (std.meta.fields(T)) |f| {
+//                 if (@hasDecl(f, "wildcard_tag")) {
+//                     @field(res, f.name) = f.type.initIterator(iter.archetype, iter.row_index, 0);
+//                 }
+//             }
+//             return res;
+//         }
+
+//         pub fn next(iter: *Iterator) ?T {
+//             //if (isSimple) return iter.simpleNext();
+//             return iter.advancedNext();
+//         }
+//     };
+// }

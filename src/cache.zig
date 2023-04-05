@@ -1,17 +1,14 @@
-
 const std = @import("std");
 const testing = std.testing;
-const reflection = @import("reflection.zig");
+const typeId = @import("typeId.zig");
 
 pub const PointerCache = struct {
-    const Map = std.AutoArrayHashMap(reflection.TypeId, usize);
+    const Map = std.AutoArrayHashMap(typeId.TypeId, usize);
     map: Map,
 
     const Self = @This();
     pub fn init(allocator: std.mem.Allocator) Self {
-        return .{
-            .map = Map.init(allocator)
-        };
+        return .{ .map = Map.init(allocator) };
     }
 
     pub fn deinit(self: *Self) void {
@@ -19,36 +16,34 @@ pub const PointerCache = struct {
     }
 
     pub fn get(self: *const Self, comptime Key: type, comptime T: type) ?*T {
-        var data = self.map.get(reflection.typeId(Key));
-        if (data) | bytes | {            
+        var data = self.map.get(typeId.typeId(Key));
+        if (data) |bytes| {
             return @intToPtr(*T, bytes);
         }
         return null;
     }
 
     pub fn set(self: *Self, comptime Key: type, comptime T: type, value: *T) !void {
-        try self.map.put(reflection.typeId(Key), @ptrToInt(value));
+        try self.map.put(typeId.typeId(Key), @ptrToInt(value));
     }
 };
 
 pub const ObjectCache = struct {
-     const Map = std.AutoArrayHashMap(reflection.TypeId, []u8);
-     map: Map,
+    const Map = std.AutoArrayHashMap(typeId.TypeId, []u8);
+    map: Map,
 
     const Self = @This();
     pub fn init(allocator: std.mem.Allocator) Self {
-        return .{
-            .map = Map.init(allocator)
-        };
+        return .{ .map = Map.init(allocator) };
     }
 
     pub fn deinit(self: *Self) void {
         self.map.deinit();
     }
 
-    pub fn get(self: * const Self, comptime T: type) ?*T {
-        var data = self.map.get(reflection.typeId(T));
-        if (data) | bytes | {            
+    pub fn get(self: *const Self, comptime T: type) ?*T {
+        var data = self.map.get(typeId.typeId(T));
+        if (data) |bytes| {
             return std.mem.bytesAsValue(T, @alignCast(@alignOf(T), bytes[0..@sizeOf(T)]));
         }
         return null;
@@ -56,7 +51,7 @@ pub const ObjectCache = struct {
 
     pub fn set(self: *Self, comptime T: type, value: *T) !void {
         var bytes = std.mem.asBytes(value);
-        try self.map.put(reflection.typeId(T), bytes[0..]);
+        try self.map.put(typeId.typeId(T), bytes[0..]);
     }
 };
 
@@ -77,7 +72,7 @@ test "ObjectCache" {
     defer allocator.destroy(data);
     data.d = 42;
     data.f = 32.2;
-    
+
     try cache.set(TestData, data);
     var result = cache.get(TestData);
 

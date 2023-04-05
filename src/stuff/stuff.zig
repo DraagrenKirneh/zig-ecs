@@ -30,6 +30,28 @@ const MyType = struct {
     }
 };
 
+pub fn typesToHolder(comptime types: []const type) type {
+    var fields: [types.len]std.builtin.Type.StructField = undefined;
+    inline for (types, 0..) |t, index| {
+        //const t_info_optional = std.builtin.TypeInfo { .Optional = .{ .child = t } };
+        fields[index] = .{
+            .name = t.name,
+            .type = t, //@Type(t_info_optional),
+            .default_value = null,
+            .is_comptime = false,
+            .alignment = if (@sizeOf(t) > 0) @alignOf(t) else 0,
+        };
+    }
+    return @Type(.{
+        .Struct = .{
+            .is_tuple = false,
+            .layout = .Auto,
+            .decls = &.{},
+            .fields = &fields,
+        },
+    });
+}
+
 test "akka" {
     const len = MyType.init()
     //.create(&[_]type{EntityID})
