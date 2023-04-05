@@ -43,7 +43,8 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
             return Iterator(T).init(self.entities);
         }
 
-        pub fn getQuery(self: *Self, comptime Key: type, comptime Value: type, comptime generateFn: fn (context: *Self) anyerror!*Value) !*Value {
+        // return a valid ptr to an object cached only per frame
+        pub fn getPerFrameCachedPtr(self: *Self, comptime Key: type, comptime Value: type, comptime generateFn: fn (context: *Self) anyerror!*Value) !*Value {
             if (self.cache.get(Key, Value)) |result| {
                 return result;
             }

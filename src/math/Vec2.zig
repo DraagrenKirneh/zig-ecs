@@ -1,10 +1,6 @@
 const std = @import("std");
 const math = std.math;
 
-// https://github.com/thegeekyasian/geo-assist/blob/master/src/main/java/com/thegeekyasian/geoassist/kdtree/KDTree.java
-// https://github.com/tkazec/canvas-td/blob/master/scripts/game.js
-// https://github.com/Rion5/2D-TowerDefense/tree/master/Assets/Scripts/Tower
-
 pub fn Vec2(comptime T: type) type {
     return struct {
         x: T,
@@ -32,33 +28,24 @@ pub const Vec2f = struct {
     }
 
     pub inline fn sub(self: Self, other: Self) Self {
-        return .{
-            .x = self.x - other.x,
-            .y = self.y - other.y
-        };
+        return .{ .x = self.x - other.x, .y = self.y - other.y };
     }
 
     pub inline fn add(self: Self, other: Self) Self {
-        return .{
-            .x = self.x + other.x,
-            .y = self.y + other.y
-        }; 
+        return .{ .x = self.x + other.x, .y = self.y + other.y };
     }
 
     pub fn move(self: Self, target: Self, speed: f32) Self {
         const distx = target.x - self.x;
-	    const disty = target.y - self.y;
-	    const angle = math.atan2(f32, disty, distx);
+        const disty = target.y - self.y;
+        const angle = math.atan2(f32, disty, distx);
 
-        return .{
-            .x = self.x + (speed * math.cos(f32, angle)),
-            .y = self.y + (speed * math.sin(f32, angle))
-        };
+        return .{ .x = self.x + (speed * math.cos(f32, angle)), .y = self.y + (speed * math.sin(f32, angle)) };
 
-	    // check for next point
-	    //return (distx < 0 ? -distx : distx) + (disty < 0 ? -disty : disty) < 2;
+        // check for next point
+        //return (distx < 0 ? -distx : distx) + (disty < 0 ? -disty : disty) < 2;
     }
-    
+
     pub fn at(x: f32, y: f32) Self {
         return .{ .x = x, .y = y };
     }
@@ -73,7 +60,7 @@ pub const Vec2f = struct {
 
     pub inline fn unit(self: Self) Self {
         const b = 1.0 / self.length();
-        return .{ 
+        return .{
             .x = self.x * b,
             .y = self.y * b,
         };
@@ -98,7 +85,7 @@ pub const Vec2f = struct {
             .y = t * other.y + (1 - t) * self.y,
         };
     }
-    
+
     pub inline fn manhattan_length(self: Self) f32 {
         return self.x + self.y;
     }

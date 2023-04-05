@@ -30,8 +30,6 @@ fn copyStructToStruct(comptime Output: type, comptime Input: type, input: Input)
     return output;
 }
 
-const componentIdResolver = @import("componentId.zig").ComponentIdResolver;
-
 const ComponentId = ecs.ComponentId;
 
 pub fn Entities(comptime TComponents: type) type {
@@ -61,7 +59,7 @@ pub fn Entities(comptime TComponents: type) type {
         //const Column = ArchetypeStorage.Column;
         //const ComponentIdValue = @enumToInt(TagType.id);
         const AnyComponent = reflection.ComponentUnion(TComponents);
-        const Resolver = componentIdResolver(TagType);
+        const Resolver = ComponentId.Resolver(TagType);
 
         const Traits = @import("traits.zig").MyTraits(TComponents, TagType);
 

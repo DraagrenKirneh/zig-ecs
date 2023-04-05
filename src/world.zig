@@ -41,7 +41,7 @@ pub fn World(comptime Context: type, comptime systems: []const type) type {
             self.clearArena();
             var alloc = self.arena.allocator();
             var ctx = try alloc.create(Context);
-            ctx.* = Context.init(alloc, &self.resources, &self.entites);
+            ctx.* = Context.init(alloc, self.resources, &self.entites);
             return Pipeline.init(ctx);
         }
     };
