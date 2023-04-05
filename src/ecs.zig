@@ -1,7 +1,10 @@
-
 // An entity ID uniquely identifies an entity globally within an Entities set.
-pub const EntityID = u64;
-pub const void_archetype_hash = @import("std").math.maxInt(EntityID);
+
+const identifiers = @import("componentId.zig");
+
+pub const EntityID = identifiers.EntityId;
+pub const EntityIdProvider = identifiers.EntityIdProvider;
+pub const ComponentId = identifiers.ComponentId;
 
 pub const Pipeline = @import("pipeline.zig").Pipeline;
 pub const Entities = @import("entities.zig").Entities;
@@ -13,10 +16,6 @@ pub const EventHandler = @import("events.zig").EventHandler;
 
 pub const math = @import("math/math.zig");
 
-const reflection = @import("reflection.zig");
-pub const TypeId = reflection.TypeId;
-pub const typeId = reflection.typeId;
-
 test {
-  @import("std").testing.refAllDecls(@This());
+    @import("std").testing.refAllDecls(@This());
 }

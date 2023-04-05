@@ -14,18 +14,18 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
         map: Map,
         root: Node,
         area: Area,
-        
+
         const Self = @This();
 
         const Node = struct {
             values: List = .{},
-            children: ?[4] *Node = null,
+            children: ?[4]*Node = null,
         };
 
         pub fn init(allocator: Allocator, area: Area) Self {
             return Self{
                 .area = area,
-                .allocator = allocator,                
+                .allocator = allocator,
                 .map = .{},
                 .root = .{},
             };
@@ -34,25 +34,25 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
         pub fn add(self: *Self, value: T, area: Area) !void {
             var current_area = self.area;
             var depth: usize = 0;
-            var node: *Node = &self.root; 
+            var node: *Node = &self.root;
 
             while (depth < maxDepth) : (depth += 1) {
-                if(node.children == null) {
+                if (node.children == null) {
                     if (node.values.items.len < threshold) {
                         break;
                     } else {
                         try self.split(node, current_area);
                     }
-                } 
+                }
                 const quadrant = current_area.getQuadrant(area);
-                if (quadrant) | quad | {
+                if (quadrant) |quad| {
                     current_area = current_area.computeArea(quad);
-                    const quadIndex = @enumToInt(quad);                    
+                    const quadIndex = @enumToInt(quad);
                     node = node.children.?[quadIndex];
-                } else { 
-                    break;                    
-                }                
-            }            
+                } else {
+                    break;
+                }
+            }
             try node.values.append(self.allocator, value);
             try self.map.put(self.allocator, value, area);
         }
@@ -65,26 +65,26 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
         }
 
         fn queryNode(self: *Self, node: *Node, scanArea: Area, queryArea: Area, list: *List) void {
-            for (node.values.items) | each | {
+            for (node.values.items) |each| {
                 const value_area = self.map.get(each).?;
-                if(queryArea.intersects(value_area)) {
+                if (queryArea.intersects(value_area)) {
                     list.appendAssumeCapacity(each);
                     if (list.items.len == list.capacity) return;
                 }
             }
-            if (node.children) | children | {
-                for (children, 0..) | child, index | {
+            if (node.children) |children| {
+                for (children, 0..) |child, index| {
                     var new_area = scanArea.computeArea(@intToEnum(Quadrant, index));
                     if (queryArea.intersects(new_area)) {
                         self.queryNode(child, new_area, queryArea, list);
                     }
                 }
-            }            
+            }
         }
 
         fn split(self: *Self, node: *Node, area: Area) !void {
             var children: [4]*Node = undefined;
-            for (0..children.len) | index | {
+            for (0..children.len) |index| {
                 var new_node = try self.allocator.create(Node);
                 new_node.* = .{};
                 //new_node.values = try List.initCapacity(self.allocator, threshold);
@@ -98,7 +98,7 @@ pub fn QuadTree(comptime T: type, comptime maxDepth: usize, comptime threshold: 
                 const value = node.values.items[end - index];
                 const value_area = self.map.get(value).?;
                 std.debug.assert(area.contains(value_area));
-                if (value_area.getQuadrant(area)) | quad | {
+                if (value_area.getQuadrant(area)) |quad| {
                     const quadIndex = @enumToInt(quad);
                     node.children.?[quadIndex].values.appendAssumeCapacity(value);
                     _ = node.values.swapRemove(end - index);
@@ -114,20 +114,20 @@ test "basic add functionality" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
-    std.debug.print("\n", .{ });
+    //std.debug.print("\n", .{});
     const QTree = QuadTree(usize, 8, 30);
     var tree = QTree.init(alloc, Area.initBasic(0, 0, 900, 900));
-    
+
     var ix: usize = 1;
-    while (ix <= 50) : ( ix += 1) {
-        const nextArea = Area.initBasic(10 * @intToFloat(f32,ix), 10 * @intToFloat(f32,ix), 10, 10);
+    while (ix <= 50) : (ix += 1) {
+        const nextArea = Area.initBasic(10 * @intToFloat(f32, ix), 10 * @intToFloat(f32, ix), 10, 10);
         try tree.add(ix, nextArea);
-    }    
+    }
 
     var result = try tree.query(Area.initBasic(5, 5, 20, 20), 10);
-    for (result) | each | {
-        std.debug.print("found: {}\n", .{ each });
-    }
+    // for (result) | each | {
+    //     std.debug.print("found: {}\n", .{ each });
+    // }
     try std.testing.expect(result.len > 0);
-   // defer tree.deinit();
+    // defer tree.deinit();
 }
