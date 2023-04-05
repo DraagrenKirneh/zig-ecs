@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn ToEnumFromNames(comptime names: []const []const u8) type {
     //const Type = std.builtin.Type;
     return Blk: {
-        var tags: [names.len]std.builtin.EnumField = undefined;
+        var tags: [names.len]std.builtin.Type.EnumField = undefined;
         inline for (names, 0..) |name, i| {
             tags[i] = .{
                 .name = name,
