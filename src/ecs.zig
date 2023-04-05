@@ -1,6 +1,10 @@
 // An entity ID uniquely identifies an entity globally within an Entities set.
-pub const EntityID = u64;
-pub const ComponentId = @import("componentId.zig").ComponentId;
+
+const identifiers = @import("componentId.zig");
+
+pub const EntityID = identifiers.EntityId;
+pub const EntityIdProvider = identifiers.EntityIdProvider;
+pub const ComponentId = identifiers.ComponentId;
 
 pub const Pipeline = @import("pipeline.zig").Pipeline;
 pub const Entities = @import("entities.zig").Entities;
