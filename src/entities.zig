@@ -366,7 +366,12 @@ pub fn Entities(comptime TComponents: type) type {
             return self.privSetComponent(entity, columnId, @TypeOf(component), component);
         }
 
-        pub fn getPair(self: *Self, entity: EntityID, comptime firstTag: TagType, comptime secondTag: TagType) ?Pair(firstTag, secondTag) {
+        pub fn getPair(
+            self: *Self,
+            entity: EntityID,
+            comptime firstTag: TagType,
+            comptime secondTag: TagType,
+        ) ?Pair(firstTag, secondTag) {
             const Component = Pair(firstTag, secondTag);
             var archetype = self.archetypeByID(entity);
             const ptr = self.entities.get(entity).?;
