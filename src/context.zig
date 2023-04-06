@@ -1,27 +1,75 @@
 const std = @import("std");
+const ecs = @import("ecs.zig");
 const Allocator = std.mem.Allocator;
 const Cache = @import("cache.zig").PointerCache;
 const EntityID = @import("ecs.zig").EntityID;
 
+pub fn CommandDeferList(comptime Entities: type) type {
+    return struct {
+        list: List,
+
+        const Self = @This();
+
+        pub fn init(allocator: Allocator) Self {
+            return .{
+                .list = List.init(allocator),
+            };
+        }
+
+        pub fn addCommand(self: *Self, entityId: ecs.EntityID, command: Command) !void {
+            return self.list.append(.{ .id = entityId, .command = command });
+        }
+
+        pub const Command = union(enum) {
+            remove_entity: void,
+            remove_pair: struct { key: Entities.TagType, value: Entities.TagType },
+            remove_component: struct { tag: Entities.TagType },
+            add_component: Entities.AnyComponent,
+        };
+
+        const Entry = struct {
+            id: ecs.EntityID,
+            command: Command,
+        };
+
+        const List = std.ArrayList(Entry);
+
+        pub fn submit(self: *Self, entities: *Entities) !void {
+            for (self.list.items) |entry| {
+                switch (entry.command) {
+                    .remove_entity => try entities.remove(entry.id),
+                    .remove_component => |cmd| try entities.removeComponent(entry.id, cmd.tag),
+                    .remove_pair => |cmd| try entities.removePair(entry.id, cmd.key, cmd.value),
+                    .add_component => |cmd| try entities.setAnyComponent(entry.id, cmd),
+                }
+            }
+            self.list.clearRetainingCapacity();
+        }
+    };
+}
+
 pub fn Context(comptime Resources: type, comptime Entities: type) type {
     return struct {
         entities: *Entities,
-        resources: ResourcesType,
+        resources: ResourcesPtr,
         allocator: Allocator,
         cache: Cache,
-        deadList: std.ArrayList(EntityID),
+        commands: DeferList,
+
+        const DeferList = CommandDeferList(Entities);
 
         const Self = @This();
-        pub const ResourcesType = if (Resources == void) void else *Resources;
+        pub const ResourcesType = Resources;
+        const ResourcesPtr = if (Resources == void) void else *Resources;
         pub const EntitesType = Entities;
 
-        pub fn init(allocator: Allocator, resources: ResourcesType, entities: *Entities) Self {
+        pub fn init(allocator: Allocator, resources: ResourcesPtr, entities: *Entities) Self {
             return .{
                 .allocator = allocator,
                 .resources = resources,
                 .entities = entities,
                 .cache = Cache.init(allocator),
-                .deadList = std.ArrayList(EntityID).init(allocator),
+                .commands = DeferList.init(allocator),
             };
         }
 
@@ -29,14 +77,12 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
             return EntitesType.TypedIter(T);
         }
 
-        pub fn deferRemove(self: *Self, id: EntityID) !void {
-            try self.deadList.append(id);
+        pub fn deferCommand(self: *Self, entityId: ecs.EntityID, command: DeferList.Command) !void {
+            return self.commands.addCommand(entityId, command);
         }
 
-        pub fn cleanup(self: *Self) !void {
-            for (self.deadList.items) |each| {
-                try self.entities.remove(each);
-            }
+        pub fn submitCommands(self: *Self) !void {
+            return self.commands.submit(self.entities);
         }
 
         pub fn getIterator(self: *Self, comptime T: type) Iterator(T) {
