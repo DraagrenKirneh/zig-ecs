@@ -58,7 +58,7 @@ pub fn Entities(comptime TComponents: type) type {
 
         //const Column = ArchetypeStorage.Column;
         //const ComponentIdValue = @enumToInt(TagType.id);
-        const AnyComponent = reflection.ComponentUnion(TComponents);
+        pub const AnyComponent = reflection.ComponentUnion(TComponents);
         const Resolver = ComponentId.Resolver(TagType);
 
         const Traits = @import("traits.zig").MyTraits(TComponents, TagType);
@@ -366,6 +366,18 @@ pub fn Entities(comptime TComponents: type) type {
             return self.privSetComponent(entity, columnId, @TypeOf(component), component);
         }
 
+        pub fn setAnyComponent(
+            self: *Self,
+            entity: EntityID,
+            component: AnyComponent,
+        ) !void {
+            const activeTag = std.meta.activeTag(component);
+            const componentId = ComponentId.initComponent(@enumToInt(activeTag));
+            return switch (component) {
+                else => |e| self.privSetComponent(entity, componentId, @TypeOf(e), e),
+            };
+        }
+
         pub fn getPair(
             self: *Self,
             entity: EntityID,
@@ -395,7 +407,7 @@ pub fn Entities(comptime TComponents: type) type {
             return archetype.get(ptr.row_index, componentId, Component);
         }
 
-        pub fn removePair(self: *Self, entity: EntityID, comptime key_tag: TagType, comptime value_tag: TagType) !void {
+        pub fn removePair(self: *Self, entity: EntityID, key_tag: TagType, value_tag: TagType) !void {
             const componentId = ComponentId.initPair(@enumToInt(key_tag), @enumToInt(value_tag));
             return self.privRemoveComponent(entity, componentId);
         }
@@ -404,7 +416,7 @@ pub fn Entities(comptime TComponents: type) type {
         pub fn removeComponent(
             self: *Self,
             entity: EntityID,
-            comptime tag: TagType,
+            tag: TagType,
         ) !void {
             const componentId = ComponentId.initComponent(@enumToInt(tag));
             return self.privRemoveComponent(entity, componentId);
@@ -624,6 +636,34 @@ test "Pair type id" {
     const ptA = ComponentId.initPair(@enumToInt(VoidPairA.key_tag), @enumToInt(VoidPairA.value_tag));
     const ptB = ComponentId.initPair(@enumToInt(VoidPairB.key_tag), @enumToInt(VoidPairB.value_tag));
     try std.testing.expect(!ptA.equal(ptB));
+}
+
+test "any component" {
+    const allocator = std.testing.allocator;
+
+    const Game = struct {
+        id: ecs.EntityID,
+        position: f32,
+        value: i32,
+    };
+
+    const MyEntities = Entities(Game);
+
+    const Entry = struct {
+        position: f32,
+        value: i32,
+    };
+    _ = Entry;
+
+    var entities = MyEntities.init(allocator);
+    defer entities.deinit();
+
+    var entityId = try entities.new();
+
+    try entities.setAnyComponent(entityId, .{ .position = 42 });
+
+    const componentPosition = entities.getComponent(entityId, .position).?;
+    try expectEqualOf(f32, 42, componentPosition);
 }
 
 test "basic" {

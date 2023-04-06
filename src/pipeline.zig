@@ -32,8 +32,7 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
                 }
             }
 
-            // @FIXME -- call this every time we run a pipe?
-            // try self.context.cleanup();
+            try self.context.submitCommands();
         }
     };
 }

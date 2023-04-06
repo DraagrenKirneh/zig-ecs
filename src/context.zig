@@ -1,27 +1,71 @@
 const std = @import("std");
+const ecs = @import("ecs");
 const Allocator = std.mem.Allocator;
 const Cache = @import("cache.zig").PointerCache;
 const EntityID = @import("ecs.zig").EntityID;
 
+pub fn ContextCommands(comptime Entities: type) type {
+    return struct {
+        commands: List,
+
+        const Self = @This();
+
+        pub fn init(allocator: Allocator) Self {
+            return .{
+                .commands = List.init(allocator),
+            };
+        }
+
+        pub const Command = union(enum) {
+            Delete: void,
+            RemovePair: struct { key: Entities.TagType, value: Entities.TagType },
+            RemoveComponent: struct { tag: Entities.TagType },
+            AddComponent: Entities.AnyComponent,
+        };
+
+        const Entry = struct {
+            id: ecs.EntityID,
+            command: Command,
+        };
+
+        const List = std.ArrayList(Entry);
+
+        pub fn submit(self: *Self, entities: *Entities) !void {
+            for (self.list.items) |entry| {
+                switch (entry.command) {
+                    .Delete => try entities.remove(entry.id),
+                    .RemoveComponent => |cmd| try entities.removeComponent(entry.id, cmd.tag),
+                    .RemovePair => |cmd| try entities.removePair(entry.id, cmd.key, cmd.value),
+                    .AddComponent => |cmd| try entities.addAnyComponent(entry.id, cmd),
+                }
+            }
+            self.commands.clearRetainingCapacity();
+        }
+    };
+}
+
 pub fn Context(comptime Resources: type, comptime Entities: type) type {
     return struct {
         entities: *Entities,
-        resources: ResourcesType,
+        resources: ResourcesPtr,
         allocator: Allocator,
         cache: Cache,
-        deadList: std.ArrayList(EntityID),
+        commands: ContextCommands(Entities),
+
+        const CommandBuffer = ContextCommands(Entities);
 
         const Self = @This();
-        pub const ResourcesType = if (Resources == void) void else *Resources;
+        pub const ResourcesType = Resources;
+        const ResourcesPtr = if (Resources == void) void else *Resources;
         pub const EntitesType = Entities;
 
-        pub fn init(allocator: Allocator, resources: ResourcesType, entities: *Entities) Self {
+        pub fn init(allocator: Allocator, resources: ResourcesPtr, entities: *Entities) Self {
             return .{
                 .allocator = allocator,
                 .resources = resources,
                 .entities = entities,
                 .cache = Cache.init(allocator),
-                .deadList = std.ArrayList(EntityID).init(allocator),
+                .commands = ContextCommands(Entities).init(allocator),
             };
         }
 
@@ -29,14 +73,12 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
             return EntitesType.TypedIter(T);
         }
 
-        pub fn deferRemove(self: *Self, id: EntityID) !void {
-            try self.deadList.append(id);
+        pub fn deferCommand(self: *Self, command: CommandBuffer.Command) !void {
+            return self.commands.commands.append(command);
         }
 
-        pub fn cleanup(self: *Self) !void {
-            for (self.deadList.items) |each| {
-                try self.entities.remove(each);
-            }
+        pub fn submitCommands(self: *Self) !void {
+            return self.commands.submit(self.entities);
         }
 
         pub fn getIterator(self: *Self, comptime T: type) Iterator(T) {
