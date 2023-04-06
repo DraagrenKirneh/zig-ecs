@@ -4,6 +4,13 @@ const reflection = @import("reflection.zig");
 const ecs = @import("ecs.zig");
 const testing = std.testing;
 
+// maybe add option to .run(..., deferOption) for better defer granularity.
+const DeferOption = enum {
+    once,
+    per_system,
+    none,
+};
+
 pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
     return struct {
         context: *Context,
@@ -18,6 +25,7 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
         pub fn run(self: *Self, comptime tag: Operation) !void {
             const declName = @tagName(tag);
             inline for (systems) |system| {
+                // @NOTE may want to have an option to submit commands per system that is run.
                 if (!@hasDecl(system, declName)) continue;
                 const field = @field(system, declName);
                 const argCount = functionArgCount(field);
@@ -96,4 +104,70 @@ test "Pipeline" {
     std.debug.print("\n", .{});
     try pipeline.run(.print);
     std.debug.print("\n---- Test Pipeline ---- \n", .{});
+}
+
+test "deferment" {
+    const allocator = std.testing.allocator;
+
+    const Components = struct {
+        id: ecs.EntityID,
+        dead: void,
+        counter: i32,
+        step: i32,
+    };
+
+    const MyEntities = ecs.Entities(Components);
+    const MyContext = ecs.Context(void, MyEntities);
+
+    const RemoveDeadSystem = struct {
+        id: ecs.EntityID,
+        dead: void,
+
+        const Self = @This();
+
+        pub fn frameEnd(self: Self, context: *MyContext) !void {
+            try context.deferCommand(self.id, .{ .remove_entity = {} });
+        }
+    };
+
+    const StepCounterSystem = struct {
+        id: ecs.EntityID,
+        counter: *i32,
+        step: i32,
+
+        const Self = @This();
+
+        pub fn update(self: Self, context: *MyContext) !void {
+            self.counter.* = self.counter.* - self.step;
+            if (self.counter.* < 0) {
+                try context.deferCommand(self.id, .{ .add_component = .{ .dead = {} } });
+            }
+        }
+    };
+
+    var entities = MyEntities.init(allocator);
+    defer entities.deinit();
+
+    var id = try entities.new();
+    try entities.setComponent(id, .counter, 10);
+    try entities.setComponent(id, .step, 11);
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    var ctx = MyContext.init(arena.allocator(), {}, &entities);
+    const Pipe = Pipeline(MyContext, &.{
+        StepCounterSystem,
+        RemoveDeadSystem,
+    });
+
+    var pipeline = Pipe.init(&ctx);
+
+    try pipeline.run(.update);
+    try pipeline.run(.frameEnd);
+
+    const Query = struct { id: ecs.EntityID };
+
+    var it = entities.getIterator(Query);
+    try std.testing.expect(it.next() == null);
 }

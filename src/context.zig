@@ -1,26 +1,30 @@
 const std = @import("std");
-const ecs = @import("ecs");
+const ecs = @import("ecs.zig");
 const Allocator = std.mem.Allocator;
 const Cache = @import("cache.zig").PointerCache;
 const EntityID = @import("ecs.zig").EntityID;
 
-pub fn ContextCommands(comptime Entities: type) type {
+pub fn CommandDeferList(comptime Entities: type) type {
     return struct {
-        commands: List,
+        list: List,
 
         const Self = @This();
 
         pub fn init(allocator: Allocator) Self {
             return .{
-                .commands = List.init(allocator),
+                .list = List.init(allocator),
             };
         }
 
+        pub fn addCommand(self: *Self, entityId: ecs.EntityID, command: Command) !void {
+            return self.list.append(.{ .id = entityId, .command = command });
+        }
+
         pub const Command = union(enum) {
-            Delete: void,
-            RemovePair: struct { key: Entities.TagType, value: Entities.TagType },
-            RemoveComponent: struct { tag: Entities.TagType },
-            AddComponent: Entities.AnyComponent,
+            remove_entity: void,
+            remove_pair: struct { key: Entities.TagType, value: Entities.TagType },
+            remove_component: struct { tag: Entities.TagType },
+            add_component: Entities.AnyComponent,
         };
 
         const Entry = struct {
@@ -33,13 +37,13 @@ pub fn ContextCommands(comptime Entities: type) type {
         pub fn submit(self: *Self, entities: *Entities) !void {
             for (self.list.items) |entry| {
                 switch (entry.command) {
-                    .Delete => try entities.remove(entry.id),
-                    .RemoveComponent => |cmd| try entities.removeComponent(entry.id, cmd.tag),
-                    .RemovePair => |cmd| try entities.removePair(entry.id, cmd.key, cmd.value),
-                    .AddComponent => |cmd| try entities.addAnyComponent(entry.id, cmd),
+                    .remove_entity => try entities.remove(entry.id),
+                    .remove_component => |cmd| try entities.removeComponent(entry.id, cmd.tag),
+                    .remove_pair => |cmd| try entities.removePair(entry.id, cmd.key, cmd.value),
+                    .add_component => |cmd| try entities.setAnyComponent(entry.id, cmd),
                 }
             }
-            self.commands.clearRetainingCapacity();
+            self.list.clearRetainingCapacity();
         }
     };
 }
@@ -50,9 +54,9 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
         resources: ResourcesPtr,
         allocator: Allocator,
         cache: Cache,
-        commands: ContextCommands(Entities),
+        commands: DeferList,
 
-        const CommandBuffer = ContextCommands(Entities);
+        const DeferList = CommandDeferList(Entities);
 
         const Self = @This();
         pub const ResourcesType = Resources;
@@ -65,7 +69,7 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
                 .resources = resources,
                 .entities = entities,
                 .cache = Cache.init(allocator),
-                .commands = ContextCommands(Entities).init(allocator),
+                .commands = DeferList.init(allocator),
             };
         }
 
@@ -73,8 +77,8 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
             return EntitesType.TypedIter(T);
         }
 
-        pub fn deferCommand(self: *Self, command: CommandBuffer.Command) !void {
-            return self.commands.commands.append(command);
+        pub fn deferCommand(self: *Self, entityId: ecs.EntityID, command: DeferList.Command) !void {
+            return self.commands.addCommand(entityId, command);
         }
 
         pub fn submitCommands(self: *Self) !void {
