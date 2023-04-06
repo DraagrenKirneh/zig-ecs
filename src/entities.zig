@@ -278,8 +278,8 @@ pub fn Entities(comptime TComponents: type) type {
                 const columns = try self.allocColumns(column_fields.len, hash);
 
                 inline for (column_fields, 0..) |field, index| {
-                    const columnId = Resolver.fromField(field);
-                    columns[index] = Column.init(columnId, field.type);
+                    const componentId = Resolver.fromField(field);
+                    columns[index] = Column.init(componentId, field.type);
                     // @INDEX
                     // try self.indexes.register(
                     //     field.type,
@@ -362,8 +362,8 @@ pub fn Entities(comptime TComponents: type) type {
             comptime tag: TagType,
             component: std.meta.fieldInfo(TComponents, tag).type,
         ) !void {
-            const columnId = ComponentId.initComponent(@enumToInt(tag));
-            return self.privSetComponent(entity, columnId, @TypeOf(component), component);
+            const componentId = ComponentId.initComponent(@enumToInt(tag));
+            return self.privSetComponent(entity, componentId, @TypeOf(component), component);
         }
 
         pub fn setAnyComponent(
@@ -425,7 +425,7 @@ pub fn Entities(comptime TComponents: type) type {
         fn privSetComponent(
             self: *Self,
             entity: EntityID,
-            columnId: ComponentId,
+            componentId: ComponentId,
             comptime Component: type,
             component: Component,
         ) !void {
@@ -434,9 +434,9 @@ pub fn Entities(comptime TComponents: type) type {
             // Determine the old hash for the archetype.
             const old_hash = archetype.hash;
 
-            var have_already = archetype.hasComponent(columnId);
+            var have_already = archetype.hasComponent(componentId);
 
-            const new_hash = if (have_already) old_hash else hashExisting(old_hash, columnId.value());
+            const new_hash = if (have_already) old_hash else hashExisting(old_hash, componentId.value());
 
             // Find the archetype storage for this entity. Could be a new archetype storage table (if a
             // new component was added), or the same archetype storage table (if just updating the
@@ -449,7 +449,7 @@ pub fn Entities(comptime TComponents: type) type {
 
                 const columns = try self.allocColumns(archetype.columns.len + 1, new_hash);
                 mem.copy(Column, columns, archetype.columns);
-                columns[columns.len - 1] = Column.init(columnId, Component);
+                columns[columns.len - 1] = Column.init(componentId, Component);
                 std.sort.sort(Column, columns, {}, by_alignment_name);
 
                 archetype_entry.value_ptr.* = ArchetypeStorage.init(self.allocator, columns);
@@ -467,7 +467,7 @@ pub fn Entities(comptime TComponents: type) type {
             if (new_hash == old_hash) {
                 // Update the value of the existing component of the entity.
                 const ptr = self.entities.get(entity).?;
-                archetype.set(ptr.row_index, columnId, Component, component);
+                archetype.set(ptr.row_index, componentId, Component, component);
                 return;
             }
 
@@ -483,7 +483,7 @@ pub fn Entities(comptime TComponents: type) type {
 
             // Update the storage/column for the new component.
 
-            archetype_entry.value_ptr.set(new_row, columnId, Component, component);
+            archetype_entry.value_ptr.set(new_row, componentId, Component, component);
 
             archetype.remove(old_ptr.row_index);
 
@@ -504,10 +504,10 @@ pub fn Entities(comptime TComponents: type) type {
         fn privRemoveComponent(
             self: *Self,
             entity: EntityID,
-            columnId: ComponentId,
+            componentId: ComponentId,
         ) !void {
             var archetype = self.archetypeByID(entity);
-            if (!archetype.hasComponent(columnId)) return;
+            if (!archetype.hasComponent(componentId)) return;
 
             // Determine the old hash for the archetype.
             const old_hash = archetype.hash;
@@ -515,7 +515,7 @@ pub fn Entities(comptime TComponents: type) type {
             // Determine the new hash for the archetype with the component removed
             var hasher = Wyhash.init(0);
             for (archetype.columns) |column| {
-                if (!column.id.equal(columnId)) hasher.update(std.mem.asBytes(&column.id.value()));
+                if (!column.id.equal(componentId)) hasher.update(std.mem.asBytes(&column.id.value()));
             }
             var new_hash: u64 = hasher.final();
             assert(new_hash != old_hash);
@@ -537,7 +537,7 @@ pub fn Entities(comptime TComponents: type) type {
 
                 var i: usize = 0;
                 for (archetype.columns) |column| {
-                    if (column.id.equal(columnId)) continue;
+                    if (column.id.equal(componentId)) continue;
                     columns[i] = column;
                     i += 1;
                 }
