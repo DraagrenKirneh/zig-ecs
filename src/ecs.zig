@@ -3,7 +3,7 @@
 const identifier = @import("identifier.zig");
 
 pub const EntityID = identifier.EntityId;
-pub const EntityIdProvider = identifier.EntityIdProvider;
+pub const IdentityGenerator = identifier.EntityIdProvider;
 pub const ComponentId = identifier.ComponentId;
 
 pub const Pipeline = @import("pipeline.zig").Pipeline;

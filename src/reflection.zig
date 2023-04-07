@@ -194,30 +194,30 @@ fn getDeclsFn(comptime T: type) []const Entry {
     }
 }
 
-pub fn Pair(comptime A: type, comptime B: type, comptime Tag: type, comptime tagA: Tag, comptime tagB: Tag) type {
-    if (A == void and B == void) return packed struct {
+pub fn Pair(comptime KeyType: type, comptime ValueType: type, comptime Tag: type, comptime tagA: Tag, comptime tagB: Tag) type {
+    if (KeyType == void and ValueType == void) return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
-        key: A = {},
-        value: B = {},
+        key: KeyType = {},
+        value: ValueType = {},
     };
-    if (A == void) return packed struct {
+    if (KeyType == void) return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
-        key: A = {},
-        value: B,
+        key: KeyType = {},
+        value: ValueType,
     };
-    if (B == void) return packed struct {
+    if (ValueType == void) return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
-        key: A,
-        value: B = {},
+        key: KeyType,
+        value: ValueType = {},
     };
     return packed struct {
         pub const key_tag: Tag = tagA;
         pub const value_tag: Tag = tagB;
-        key: A,
-        value: B,
+        key: KeyType,
+        value: ValueType,
     };
 }
 
