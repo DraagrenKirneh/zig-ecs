@@ -217,6 +217,7 @@ pub fn ArchetypeStorage() type {
         }
 
         pub fn get(storage: *const Self, row_index: u32, id: ComponentId, comptime ColumnType: type) ?ColumnType {
+            std.debug.assert(row_index < storage.len);
             for (storage.columns) |column| {
                 if (!column.id.equal(id)) continue;
                 if (@sizeOf(ColumnType) == 0) return {};
@@ -315,7 +316,7 @@ pub fn ArchetypeStorage() type {
             // @opt could do single file copy if src.len == dest.len...
             for (dest.columns) |column| {
                 //@FIXME remove and let it copy the id as well...
-                if (column.id.isEntityId()) continue;
+                //if (column.id.isEntityId()) continue;
                 for (src.columns) |corresponding| {
                     if (column.id.equal(corresponding.id)) {
                         const old_value_raw = src.getRaw(src_index, column.id);
