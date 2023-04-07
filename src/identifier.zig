@@ -6,7 +6,7 @@ const Field = std.builtin.Type.StructField;
 
 pub const EntityId = u64;
 
-pub const EntityIdFields = packed struct {
+pub const EntityIdFields = packed struct(u64) {
     id: u32 = 0,
     generation: u16 = 0,
     watermark: u4 = 0b0110,
@@ -93,7 +93,7 @@ pub fn ComponentIdResolver(comptime ComponentTag: type) type {
     };
 }
 
-pub const ComponentId = packed struct {
+pub const ComponentId = packed struct(u32) {
     component_a: u14 = 0,
     component_b: u14 = 0,
     reserved: u2 = 0,

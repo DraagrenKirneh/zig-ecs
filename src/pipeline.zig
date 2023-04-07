@@ -4,11 +4,15 @@ const reflection = @import("reflection.zig");
 const ecs = @import("ecs.zig");
 const testing = std.testing;
 
-// maybe add option to .run(..., deferOption) for better defer granularity.
 const DeferOption = enum {
+    // submit the defer queue at the end of the run
     once,
-    per_system,
-    none,
+
+    // submit the defer queue after each system on the same run
+    always,
+
+    // skip the queue
+    skip,
 };
 
 pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
@@ -22,7 +26,7 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
             return .{ .context = context };
         }
 
-        pub fn run(self: *Self, comptime tag: Operation) !void {
+        pub fn runWithDefferment(self: *Self, comptime tag: Operation, comptime defferment: DeferOption) !void {
             const declName = @tagName(tag);
             inline for (systems) |system| {
                 // @NOTE may want to have an option to submit commands per system that is run.
@@ -38,9 +42,18 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
                         try @call(.auto, field, .{ value, self.context });
                     }
                 }
+                if (defferment == .always) {
+                    try self.context.submitCommands();
+                }
             }
 
-            try self.context.submitCommands();
+            if (defferment == .once) {
+                try self.context.submitCommands();
+            }
+        }
+
+        pub fn run(self: *Self, comptime tag: Operation) !void {
+            return self.runWithDefferment(tag, .once);
         }
     };
 }

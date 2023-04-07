@@ -234,7 +234,7 @@ pub fn ArchetypeStorage() type {
             return columnValues[row_index];
         }
 
-        pub fn getInto(storage: *const Self, row_index: u32, comptime TValue: type, comptime componentIds: []const ComponentId) ?TValue {
+        pub fn getInto(storage: *const Self, row_index: u32, comptime TValue: type, comptime componentIds: []const ComponentId) TValue {
             var data: TValue = undefined;
             inline for (std.meta.fields(TValue), componentIds) |field, componentId| {
                 if (@sizeOf(field.type) == 0) continue;
@@ -312,7 +312,9 @@ pub fn ArchetypeStorage() type {
         }
 
         pub fn copyRow(src: *Self, src_index: u32, dest: *Self, dest_index: u32) void {
+            // @opt could do single file copy if src.len == dest.len...
             for (dest.columns) |column| {
+                //@FIXME remove and let it copy the id as well...
                 if (column.id.isEntityId()) continue;
                 for (src.columns) |corresponding| {
                     if (column.id.equal(corresponding.id)) {
@@ -329,21 +331,6 @@ pub fn ArchetypeStorage() type {
     };
 }
 
-// fn calculateHash(names: []const []const u8) u64 {
-//     var hash: u64 = 0;
-//     for (names) |name| {
-//         hash ^= std.hash_map.hashString(name);
-//     }
-//     return hash;
-// }
-
-// test "hash" {
-//     var h1 = calculateHash(&.{ "id", "rotation", "position" });
-//     var h2 = calculateHash(&.{ "position", "rotation", "id" });
-//     std.debug.print("H: {} -> {}", .{ h1, h2 });
-//     try std.testing.expect(h1 == h2);
-// }
-
 test "init" {
     std.debug.print("\n start init \n", .{});
     const Components = struct { id: EntityID };
@@ -351,9 +338,6 @@ test "init" {
     const Tags = std.meta.FieldEnum(Components);
 
     const Storage = ArchetypeStorage();
-
-    //const Resolver = ecs.ComponentId.Resolver(Tags);
-    //const Column = Storage.Column;
 
     const allocator = std.testing.allocator;
     const columns = try allocator.alloc(Column, 1);
@@ -363,19 +347,13 @@ test "init" {
 
     const row = Components{ .id = 42 };
 
-    // const MyType = struct {
-    //     location: f32,
-    //     rotation: f32,
-    // };
-
     var row_index = try b.append(
         Components,
         row,
         &[_]ComponentId{ComponentId.initComponent(0)},
     );
     var res = b.getInto(row_index, Components, &[_]ComponentId{ComponentId.initComponent(0)});
-    try std.testing.expect(res != null);
+    try std.testing.expect(res.id == 42);
 
     defer b.deinit();
-    //try std.testing.expect(b.len == 0);
 }

@@ -22,8 +22,8 @@ pub fn CommandDeferList(comptime Entities: type) type {
 
         pub const Command = union(enum) {
             remove_entity: void,
-            remove_pair: struct { key: Entities.TagType, value: Entities.TagType },
-            remove_component: struct { tag: Entities.TagType },
+            remove_pair: struct { key: Entities.Tag, value: Entities.Tag },
+            remove_component: struct { tag: Entities.Tag },
             add_component: Entities.AnyComponent,
         };
 

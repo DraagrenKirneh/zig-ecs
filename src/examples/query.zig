@@ -92,9 +92,6 @@ test "test spatial query" {
     var pipeline = try world.createPipeline();
 
     try pipeline.run(.step);
-    // try pipeline.run(.step);
-    // try pipeline.run(.step);
-    // try pipeline.run(.step);
 
     var pipeline2 = try world.createPipeline();
     try pipeline2.run(.step);
