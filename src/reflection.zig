@@ -1,7 +1,6 @@
 const std = @import("std");
 
 pub fn ToEnumFromNames(comptime names: []const []const u8) type {
-    //const Type = std.builtin.Type;
     return Blk: {
         var tags: [names.len]std.builtin.Type.EnumField = undefined;
         inline for (names, 0..) |name, i| {
@@ -46,16 +45,12 @@ pub fn ComponentUnion(comptime T: type) type {
     const fields = std.meta.fields(T);
     var union_fields: [fields.len]std.builtin.Type.UnionField = undefined;
     inline for (fields, 0..) |namespace, i| {
-        //const component_enum = std.meta.FieldEnum(namespace.type);
         union_fields[i] = .{
             .name = namespace.name,
             .type = namespace.type,
             .alignment = @alignOf(namespace.type),
         };
     }
-
-    // need type_info variable (rather than embedding in @Type() call)
-    // to work around stage 1 bug
     const type_info = std.builtin.Type{
         .Union = .{
             .layout = .Auto,
@@ -70,7 +65,6 @@ pub fn ComponentUnion(comptime T: type) type {
 pub fn StructWrapperWithId(comptime idType: type, comptime componentType: type) type {
     if (componentType == void) return struct { id: idType };
     if (@hasField(componentType, "id")) {
-        //std.debug.assert(@TypeOf(componentType.id) == idType);  // fixme validate or?
         return componentType;
     }
     return blk: {

@@ -76,15 +76,15 @@ pub fn Entities(comptime TComponents: type) type {
 
         pub fn Pair(comptime key_tag: Tag, comptime value_tag: Tag) type {
             return reflection.Pair(
-                TypeFromTag(key_tag),
-                TypeFromTag(value_tag),
+                ComponentType(key_tag),
+                ComponentType(value_tag),
                 Tag,
                 key_tag,
                 value_tag,
             );
         }
 
-        fn TypeFromTag(comptime tag: Tag) type {
+        fn ComponentType(comptime tag: Tag) type {
             return std.meta.fieldInfo(TComponents, tag).type;
         }
 
@@ -97,7 +97,7 @@ pub fn Entities(comptime TComponents: type) type {
                     value: AnyComponent,
                 };
 
-                pub const Key = TypeFromTag(key_tag);
+                pub const Key = ComponentType(key_tag);
                 pub const wildcard_tag = key_tag;
 
                 pub fn initIterator(storage: *const ArchetypeStorage, row_index: u32) @This() {
@@ -121,11 +121,11 @@ pub fn Entities(comptime TComponents: type) type {
                             if (column_id.pair == 1 and column_id.component_a == @enumToInt(key_tag)) {
                                 inline for (std.meta.fields(Tag)) |f| {
                                     if (column_id.component_b == f.value) {
-                                        const MyPair = Pair(key_tag, @intToEnum(Tag, f.value));
+                                        const value_tag = @intToEnum(Tag, f.value);
                                         const pair = self.storage.getByColumnIndex(
                                             self.row_index,
                                             self.column_index,
-                                            MyPair,
+                                            Pair(key_tag, value_tag),
                                         );
                                         return Result{
                                             .key = pair.key,
@@ -141,8 +141,7 @@ pub fn Entities(comptime TComponents: type) type {
             };
         }
 
-        fn by_alignment_name(context: void, lhs: Column, rhs: Column) bool {
-            _ = context;
+        fn by_alignment_name(_: void, lhs: Column, rhs: Column) bool {
             if (lhs.alignment < rhs.alignment) return true;
             return lhs.id.value() < rhs.id.value();
         }
@@ -366,7 +365,7 @@ pub fn Entities(comptime TComponents: type) type {
             comptime secondTag: Tag,
         ) ?Pair(firstTag, secondTag) {
             const Component = Pair(firstTag, secondTag);
-            var archetype = self.archetypeByID(entity);
+            const archetype = self.archetypeByID(entity);
             const ptr = self.entities.get(entity).?;
             const pairId = ComponentId.initPair(@enumToInt(firstTag), @enumToInt(secondTag));
             return archetype.get(ptr.row_index, pairId, Component);
@@ -412,22 +411,26 @@ pub fn Entities(comptime TComponents: type) type {
         ) !void {
             var archetype = self.archetypeByID(entity);
 
-            // Determine the old hash for the archetype.
+            const have_already = archetype.hasComponent(componentId);
+            if (have_already) {
+                // Update the value of the existing component of the entity.
+                const ptr = self.entities.get(entity).?;
+                archetype.set(ptr.row_index, componentId, Component, component);
+                return;
+            }
+
             const old_hash = archetype.hash;
-
-            var have_already = archetype.hasComponent(componentId);
-
-            const new_hash = if (have_already) old_hash else hashExisting(old_hash, componentId.value());
+            const new_hash = hashExisting(old_hash, componentId.value());
 
             // Find the archetype storage for this entity. Could be a new archetype storage table (if a
             // new component was added), or the same archetype storage table (if just updating the
             // value of a component.)
             var archetype_entry = try self.archetypes.getOrPut(self.allocator, new_hash);
-            archetype = self.archetypeByID(entity);
+
             if (!archetype_entry.found_existing) {
                 // getOrPut allocated, so the archetype we retrieved earlier may no longer be a valid
                 // pointer. Refresh it now:
-
+                archetype = self.archetypeByID(entity);
                 const columns = try self.allocColumns(archetype.columns.len + 1, new_hash);
                 mem.copy(Column, columns, archetype.columns);
                 columns[columns.len - 1] = Column.init(componentId, Component);
@@ -440,46 +443,44 @@ pub fn Entities(comptime TComponents: type) type {
                 // }
             }
 
-            // Either new storage (if the entity moved between storage tables due to having a new
-            // component) or the prior storage (if the entity already had the component and it's value
-            // is merely being updated.)
-            //var current_archetype_storage = &archetype_entry.value_ptr;
+            const new_row = try self.moveEntity(
+                entity,
+                archetype,
+                archetype_entry.value_ptr,
+                archetype_entry.index,
+            );
 
-            if (new_hash == old_hash) {
-                // Update the value of the existing component of the entity.
-                const ptr = self.entities.get(entity).?;
-                archetype.set(ptr.row_index, componentId, Component, component);
-                return;
+            archetype_entry.value_ptr.set(
+                new_row,
+                componentId,
+                Component,
+                component,
+            );
+        }
+
+        // move an existing entity from one storage to another, copying all the rows that exists in both.
+        fn moveEntity(self: *Self, entityId: EntityID, source: *ArchetypeStorage, destination: *ArchetypeStorage, index: usize) !u32 {
+            const new_row = try destination.appendUndefined();
+            const old_ptr = self.entities.get(entityId).?;
+
+            source.copyRow(old_ptr.row_index, destination, new_row);
+            source.remove(old_ptr.row_index);
+
+            const component_id = ComponentId.initComponent(@enumToInt(Tag.id));
+            destination.set(new_row, component_id, EntityID, entityId);
+
+            if (source.len > 0) {
+                const swapped_entity_id = source.get(old_ptr.row_index, component_id, EntityID).?;
+                std.debug.assert(swapped_entity_id != entityId);
+                try self.putEntityPointer(swapped_entity_id, old_ptr);
             }
 
-            // Copy to all component values for our entity from the old archetype storage (archetype)
-            // to the new one (current_archetype_storage).
-            const new_row = try archetype_entry.value_ptr.appendUndefined();
-            const old_ptr = self.entities.get(entity).?;
-
-            // Update the storage/columns for all of the existing components on the entity.
-            const entityComponentid = ComponentId.initComponent(@enumToInt(Tag.id));
-            archetype_entry.value_ptr.set(new_row, entityComponentid, EntityID, entity);
-            archetype.copyRow(old_ptr.row_index, archetype_entry.value_ptr, new_row);
-
-            // Update the storage/column for the new component.
-
-            archetype_entry.value_ptr.set(new_row, componentId, Component, component);
-
-            archetype.remove(old_ptr.row_index);
-
-            // @fixme assert id == 0;
-            const swapped_entity_id = archetype.get(old_ptr.row_index, .{}, EntityID).?;
-            // TODO: try is wrong here and below?
-            // if we removed the last entry from archetype, then swapped_entity_id == entity
-            // so the second entities.put will clobber this one
-            try self.putEntityPointer(swapped_entity_id, old_ptr);
-            try self.putEntityPointer(entity, .{
-                .archetype_index = @intCast(u16, archetype_entry.index),
+            try self.putEntityPointer(entityId, .{
+                .archetype_index = @intCast(u16, index),
                 .row_index = new_row,
             });
 
-            return;
+            return new_row;
         }
 
         fn privRemoveComponent(
@@ -507,10 +508,6 @@ pub fn Entities(comptime TComponents: type) type {
             // require creating a new archetype table!
             var archetype_entry = try self.archetypes.getOrPut(self.allocator, new_hash);
 
-            // getOrPut allocated, so the archetype we retrieved earlier may no longer be a valid
-            // pointer. Refresh it now:
-            // archetype = self.archetypeByID(entity);
-
             if (!archetype_entry.found_existing) {
                 archetype = self.archetypeByID(entity);
 
@@ -530,31 +527,12 @@ pub fn Entities(comptime TComponents: type) type {
                 archetype_entry.value_ptr.* = ArchetypeStorage.init(self.allocator, columns);
             }
 
-            var current_archetype_storage = archetype_entry.value_ptr;
-
-            // Copy to all component values for our entity from the old archetype storage (archetype)
-            // to the new one (current_archetype_storage).
-            const new_row = try current_archetype_storage.appendUndefined();
-            const old_ptr = self.entities.get(entity).?;
-
-            // Update the storage/columns for all of the existing components on the entity that exist in
-            // the new archetype table (i.e. excluding the component to remove.)
-
-            const component_id = ComponentId.initComponent(@enumToInt(Tag.id));
-            current_archetype_storage.set(new_row, component_id, EntityID, entity);
-            archetype.copyRow(old_ptr.row_index, current_archetype_storage, new_row);
-
-            archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = archetype.get(old_ptr.row_index, component_id, EntityID).?;
-            // TODO: try is wrong here and below?
-            // if we removed the last entry from archetype, then swapped_entity_id == entity
-            // so the second entities.put will clobber this one
-
-            try self.putEntityPointer(swapped_entity_id, old_ptr);
-            try self.putEntityPointer(entity, .{
-                .archetype_index = @intCast(u16, archetype_entry.index),
-                .row_index = new_row,
-            });
+            _ = try self.moveEntity(
+                entity,
+                archetype,
+                archetype_entry.value_ptr,
+                archetype_entry.index,
+            );
         }
 
         fn putEntityPointer(self: *Self, id: EntityID, ptr: Pointer) !void {
@@ -582,10 +560,29 @@ pub fn Entities(comptime TComponents: type) type {
             };
         }
 
-        // TODO: iteration over all entities
-        // TODO: iteration over all entities with components (U, V, ...)
-        // TODO: iteration over all entities with type T
-        // TODO: iteration over all entities with type T and components (U, V, ...)
+        // TODO: ability to remove archetype entirely, deleting all entities in it
+        fn killArchetype(self: *Self, storage: *ArchetypeStorage) !void {
+            const component_id = ComponentId.initComponent(@enumToInt(Tag.id));
+            const column = storage.getColumn(EntityID, component_id);
+            for (column) |id| {
+                self.entities.remove(id);
+                // fixme list;
+                try self.id_generator.recycle(self.allocator, id);
+            }
+            // destroys all ptrs to old index...
+            self.archetypes.swapRemove(storage.hash);
+            storage.deinit();
+        }
+
+        fn removeEmptyArchetypes(self: *Self) !void {
+            var list = std.ArrayListUnmanaged(u64).initCapacity(self.allocator, self.archetypes.count());
+            for (self.archetypes.entries) |storage| {
+                if (storage.len == 0) {
+                    list.appendAssumeCapacity(storage.hash);
+                }
+            }
+            // fixme need to fix up all entity ptrs that have been broken from this...
+        }
 
         // TODO: "indexes" - a few ideas we could express:
         //
@@ -594,8 +591,6 @@ pub fn Entities(comptime TComponents: type) type {
         // * Generic index: "give me all entities where arbitraryFunction(e) returns true"
         //
 
-        // TODO: ability to remove archetype entirely, deleting all entities in it
-        // TODO: ability to remove archetypes with no entities (garbage collection)
     };
 }
 
@@ -886,6 +881,8 @@ test "ecc" {
 
     var exx = try b.create(EntryWithId, .{ .id = 777, .location = 25 });
     try expectEqualOf(ecs.EntityID, 777, exx);
+
+    //try b.removeComponent(e, .rotation);
 }
 
 fn expectEqualOf(comptime T: type, expected: T, actual: T) !void {
