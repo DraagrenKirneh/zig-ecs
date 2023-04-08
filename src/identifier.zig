@@ -60,6 +60,11 @@ pub const EntityIdProvider = struct {
             try self.list.append(allocator, nextGeneration);
         }
     }
+
+    // @fixme recyling after append or something;
+    pub fn recycleSlice(self: *Self, allocator: std.mem.Allocator, items: []const EntityId) !void {
+        return self.list.appendSlice(allocator, items);
+    }
 };
 
 pub fn ComponentIdResolver(comptime ComponentTag: type) type {

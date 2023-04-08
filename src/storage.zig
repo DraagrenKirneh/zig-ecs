@@ -253,6 +253,15 @@ pub fn ArchetypeStorage() type {
             return data;
         }
 
+        pub fn getColumn(storage: *const Self, comptime T: type, comptime componentId: ComponentId) [*]T {
+            for (storage.columns) |column| {
+                if (column.id.equal(componentId)) {
+                    return @ptrCast([*]T, @alignCast(@alignOf(T), &storage.block[column.offset]));
+                }
+            }
+            unreachable;
+        }
+
         pub fn getColumnId(storage: *const Self, column_index: usize) ComponentId {
             return storage.columns[column_index].id;
         }
@@ -313,10 +322,8 @@ pub fn ArchetypeStorage() type {
         }
 
         pub fn copyRow(src: *Self, src_index: u32, dest: *Self, dest_index: u32) void {
-            // @opt could do single file copy if src.len == dest.len...
+            // @opt could do single iteration copy if src === dest ?.
             for (dest.columns) |column| {
-                //@FIXME remove and let it copy the id as well...
-                //if (column.id.isEntityId()) continue;
                 for (src.columns) |corresponding| {
                     if (column.id.equal(corresponding.id)) {
                         const old_value_raw = src.getRaw(src_index, column.id);

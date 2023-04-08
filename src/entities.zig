@@ -560,10 +560,29 @@ pub fn Entities(comptime TComponents: type) type {
             };
         }
 
-        // TODO: iteration over all entities
-        // TODO: iteration over all entities with components (U, V, ...)
-        // TODO: iteration over all entities with type T
-        // TODO: iteration over all entities with type T and components (U, V, ...)
+        // TODO: ability to remove archetype entirely, deleting all entities in it
+        fn killArchetype(self: *Self, storage: *ArchetypeStorage) !void {
+            const component_id = ComponentId.initComponent(@enumToInt(Tag.id));
+            const column = storage.getColumn(EntityID, component_id);
+            for (column) |id| {
+                self.entities.remove(id);
+                // fixme list;
+                try self.id_generator.recycle(self.allocator, id);
+            }
+            // destroys all ptrs to old index...
+            self.archetypes.swapRemove(storage.hash);
+            storage.deinit();
+        }
+
+        fn removeEmptyArchetypes(self: *Self) !void {
+            var list = std.ArrayListUnmanaged(u64).initCapacity(self.allocator, self.archetypes.count());
+            for (self.archetypes.entries) |storage| {
+                if (storage.len == 0) {
+                    list.appendAssumeCapacity(storage.hash);
+                }
+            }
+            // fixme need to fix up all entity ptrs that have been broken from this...
+        }
 
         // TODO: "indexes" - a few ideas we could express:
         //
@@ -572,8 +591,6 @@ pub fn Entities(comptime TComponents: type) type {
         // * Generic index: "give me all entities where arbitraryFunction(e) returns true"
         //
 
-        // TODO: ability to remove archetype entirely, deleting all entities in it
-        // TODO: ability to remove archetypes with no entities (garbage collection)
     };
 }
 
