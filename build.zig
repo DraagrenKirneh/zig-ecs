@@ -4,9 +4,8 @@ pub const Package = struct {
     ecs: *std.Build.Module,
 
     pub fn build(b: *std.Build) Package {
-        
         const ecs = b.createModule(.{
-            .source_file = .{ .path = thisDir() ++ "/src/ecs.zig" },            
+            .source_file = .{ .path = thisDir() ++ "/src/ecs.zig" },
         });
 
         return .{
@@ -40,4 +39,3 @@ pub fn buildTests(
 inline fn thisDir() []const u8 {
     return comptime std.fs.path.dirname(@src().file) orelse ".";
 }
-

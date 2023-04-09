@@ -15,8 +15,39 @@ fn typeIdValue(comptime T: type) usize {
     }.x);
 }
 
+pub fn FixedCache(comptime types: []const type) type {
+    return struct {
+        const offset_buffer = [types.len]usize;
+        const total_size = blk: {
+            var count = 0;
+            inline for (types, 0..) |T, i| {
+                offset_buffer[i] = count;
+                count += @sizeOf(T);
+            }
+            break :blk count;
+        };
+
+        buffer: []u8,
+
+        const Self = @This();
+
+        pub fn get(self: *Self, comptime T: type) *T {
+            const index = comptime blk: {
+                inline for (types, 0..) |tp, i| {
+                    if (tp == T) break :blk i;
+                }
+                unreachable;
+            };
+
+            const offset = offset_buffer[index];
+
+            return @ptrCast(*T, @alignCast(@alignOf(T), &self.buffer[offset..]));
+        }
+    };
+}
+
 pub const PointerCache = struct {
-    const Map = std.AutoArrayHashMap(TypeId, usize);
+    const Map = std.AutoHashMap(TypeId, usize);
     map: Map,
 
     const Self = @This();
@@ -28,12 +59,40 @@ pub const PointerCache = struct {
         self.map.deinit();
     }
 
+    pub fn getSingle(self: *const Self, comptime T: type) ?*T {
+        return self.get(T, T);
+    }
+
+    pub fn createEntry(self: *Self, comptime T: type) !*T {
+        const entry = try self.map.allocator.create(T);
+        try self.setSingle(T, entry);
+        return entry;
+    }
+
     pub fn get(self: *const Self, comptime Key: type, comptime T: type) ?*T {
         var data = self.map.get(typeId(Key));
         if (data) |bytes| {
             return @intToPtr(*T, bytes);
         }
         return null;
+    }
+
+    pub fn destroy(self: *Self, comptime T: type) void {
+        if (self.remove(T)) |entry| {
+            self.map.allocator.destroy(entry);
+        }
+    }
+
+    pub fn remove(self: *Self, comptime T: type) ?*T {
+        if (self.get(T, T)) |entry| {
+            _ = self.map.remove(typeId(T));
+            return entry;
+        }
+        return null;
+    }
+
+    pub fn setSingle(self: *Self, comptime T: type, value: *T) !void {
+        return self.set(T, T, value);
     }
 
     pub fn set(self: *Self, comptime Key: type, comptime T: type, value: *T) !void {
