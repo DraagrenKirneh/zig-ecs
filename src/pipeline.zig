@@ -3,6 +3,7 @@ const storage = @import("storage.zig");
 const reflection = @import("reflection.zig");
 const ecs = @import("ecs.zig");
 const testing = std.testing;
+const Cache = @import("cache.zig").PointerCache;
 
 const DeferOption = enum {
     // submit the defer queue at the end of the run
@@ -105,8 +106,9 @@ test "Pipeline" {
     const e = try entities.new();
     try entities.setComponent(e, .rotation, 42);
 
-    //var state: i32 = 43;
-    var ctx = MyContext.init(allocator, {}, &entities);
+    //var state: i32 = 43;,
+    var cache = Cache.init(allocator);
+    var ctx = MyContext.init(allocator, cache, {}, &entities);
     const Pipe = Pipeline(MyContext, &.{RotationSystem});
 
     var pipeline = Pipe.init(&ctx);
@@ -168,7 +170,8 @@ test "deferment" {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
-    var ctx = MyContext.init(arena.allocator(), {}, &entities);
+    var cache = Cache.init(allocator);
+    var ctx = MyContext.init(arena.allocator(), cache, {}, &entities);
     const Pipe = Pipeline(MyContext, &.{
         StepCounterSystem,
         RemoveDeadSystem,

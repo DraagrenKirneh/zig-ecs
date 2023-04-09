@@ -55,6 +55,7 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
         allocator: Allocator,
         cache: Cache,
         commands: DeferList,
+        singletons: Cache,
 
         const DeferList = CommandDeferList(Entities);
 
@@ -63,13 +64,19 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
         const ResourcesPtr = if (Resources == void) void else *Resources;
         pub const EntitesType = Entities;
 
-        pub fn init(allocator: Allocator, resources: ResourcesPtr, entities: *Entities) Self {
+        pub fn init(
+            allocator: Allocator,
+            singletons: Cache,
+            resources: ResourcesPtr,
+            entities: *Entities,
+        ) Self {
             return .{
                 .allocator = allocator,
                 .resources = resources,
                 .entities = entities,
                 .cache = Cache.init(allocator),
                 .commands = DeferList.init(allocator),
+                .singletons = singletons,
             };
         }
 
