@@ -202,11 +202,11 @@ pub fn Entities(comptime TComponents: type) type {
         }
 
         pub fn getEntity(self: *const Self, comptime T: type, id: EntityID) ?T {
+            const components = comptime extractComponentIds(T);
             if (self.entities.get(id)) |ptr| {
                 const archetype = self.archetypeByID(id);
-                const components = extractComponentIds(T);
                 if (!archetype.hasComponents(components)) return null;
-                return archetype.getInto(ptr.row_index, T);
+                return archetype.getInto(ptr.row_index, T, components);
             }
             return null;
         }
