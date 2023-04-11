@@ -11,8 +11,11 @@ pub const Entities = @import("entities.zig").Entities;
 pub const ArchetypeStorage = @import("storage.zig").ArchetypeStorage;
 pub const Context = @import("context.zig").Context;
 pub const World = @import("world.zig").World;
-pub const PointerCache = @import("cache.zig").PointerCache;
 
+const cache = @import("cache.zig");
+pub const PointerCache = cache.PointerCache;
+pub const ResourceCache = cache.ResourceCache;
+pub const Resources = @import("resources.zig").Resources;
 pub const EventHandler = @import("events.zig").EventHandler;
 
 pub const math = @import("math/math.zig");

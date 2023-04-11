@@ -48,26 +48,23 @@ pub fn CommandDeferList(comptime Entities: type) type {
     };
 }
 
-pub fn Context(comptime Resources: type, comptime Entities: type) type {
+pub fn Context(comptime Entities: type) type {
     return struct {
         entities: *Entities,
-        resources: ResourcesPtr,
+        resources: *const ecs.ResourceCache,
         allocator: Allocator,
         cache: Cache,
         commands: DeferList,
-        singletons: Cache,
 
         const DeferList = CommandDeferList(Entities);
 
         const Self = @This();
-        pub const ResourcesType = Resources;
-        const ResourcesPtr = if (Resources == void) void else *Resources;
+
         pub const EntitesType = Entities;
 
         pub fn init(
             allocator: Allocator,
-            singletons: Cache,
-            resources: ResourcesPtr,
+            resources: *const ecs.ResourceCache,
             entities: *Entities,
         ) Self {
             return .{
@@ -76,12 +73,15 @@ pub fn Context(comptime Resources: type, comptime Entities: type) type {
                 .entities = entities,
                 .cache = Cache.init(allocator),
                 .commands = DeferList.init(allocator),
-                .singletons = singletons,
             };
         }
 
         fn Iterator(comptime T: type) type {
             return EntitesType.TypedIter(T);
+        }
+
+        pub fn getResource(self: *const Self, comptime T: type) *T {
+            return self.resources.get(T);
         }
 
         pub fn deferCommand(self: *Self, entityId: ecs.EntityID, command: DeferList.Command) !void {

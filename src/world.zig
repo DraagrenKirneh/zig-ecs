@@ -8,26 +8,27 @@ const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
 pub fn World(comptime Context: type, comptime systems: []const type) type {
-    const Resources = Context.ResourcesType;
     const Entites = Context.EntitesType;
     return struct {
         base_allocator: Allocator,
         arena: ArenaAllocator,
         entites: Entites,
-        resources: Resources,
-        singletons: ecs.PointerCache,
+        resources: ecs.Resources,
 
         const Self = @This();
         const Pipeline = ecs.Pipeline(Context, systems);
 
-        pub fn init(allocator: Allocator, resources: Resources) !Self {
+        pub fn init(allocator: Allocator) !Self {
             return Self{
-                .resources = resources,
                 .base_allocator = allocator,
                 .entites = Entites.init(allocator),
                 .arena = ArenaAllocator.init(allocator),
-                .singletons = ecs.PointerCache.init(allocator),
+                .resources = ecs.Resources.init(allocator),
             };
+        }
+
+        pub fn createResource(self: *Self, comptime T: type, value: T) !void {
+            return self.resources.create(T, value);
         }
 
         pub fn startup(self: *Self, comptime list: []const type) !void {
@@ -47,7 +48,7 @@ pub fn World(comptime Context: type, comptime systems: []const type) type {
         pub fn deinit(self: *Self) void {
             self.entites.deinit();
             self.arena.deinit();
-            self.singletons.deinit();
+            self.resources.deinit();
         }
 
         fn clearArena(self: *Self) void {
@@ -58,11 +59,9 @@ pub fn World(comptime Context: type, comptime systems: []const type) type {
             self.clearArena();
             var alloc = self.arena.allocator();
             var ctx = try alloc.create(Context);
-            const ref = if (Resources != void) &self.resources else self.resources;
             ctx.* = Context.init(
                 alloc,
-                self.singletons,
-                ref,
+                &self.resources.cache,
                 &self.entites,
             );
             return Pipeline.init(ctx);
@@ -83,8 +82,9 @@ test "example" {
     const GlobalState = struct {
         counter: usize = 0,
     };
+    _ = GlobalState;
     const Entities = ecs.Entities(Components);
-    const Context = ecs.Context(GlobalState, Entities);
+    const Context = ecs.Context(Entities);
 
     const MoveSystem = struct {
         position: *ecs.math.Vec2f,
@@ -100,7 +100,7 @@ test "example" {
 
     const MyWorld = ecs.World(Context, &.{MoveSystem});
 
-    var world = try MyWorld.init(allocator, .{});
+    var world = try MyWorld.init(allocator);
     defer world.deinit();
 
     const EntityTemplate = struct {
@@ -147,11 +147,8 @@ test "singletons" {
         id: ecs.EntityID,
     };
 
-    const GlobalState = struct {
-        stuff: usize = 0,
-    };
     const Entities = ecs.Entities(Components);
-    const Context = ecs.Context(GlobalState, Entities);
+    const Context = ecs.Context(Entities);
 
     const CounterSingleton = struct { value: usize = 0 };
 
@@ -159,29 +156,29 @@ test "singletons" {
         const Self = @This();
 
         pub fn update(context: *Context) !void {
-            const ptr = context.singletons.getSingle(CounterSingleton).?;
+            const ptr = context.resources.get(CounterSingleton);
             ptr.value += 1;
         }
 
         pub fn print(context: *Context) !void {
-            const ptr = context.singletons.getSingle(CounterSingleton).?;
+            const ptr = context.resources.get(CounterSingleton);
             std.debug.print("\n-- Counter: {d}\n", .{ptr.value});
         }
     };
 
     const MyWorld = ecs.World(Context, &.{CounterSystem});
 
-    var world: MyWorld = try MyWorld.init(allocator, .{});
+    var world: MyWorld = try MyWorld.init(allocator);
     defer world.deinit();
 
     const CounterRegistration = struct {
         pub fn startup(w: *MyWorld) !void {
-            const x = try w.singletons.createEntry(CounterSingleton);
-            x.value = 10;
+            try w.createResource(CounterSingleton, .{ .value = 10 });
         }
 
         pub fn shutdown(w: *MyWorld) void {
-            w.singletons.destroy(CounterSingleton);
+            _ = w;
+            //w.singletons.destroy(CounterSingleton);
         }
     };
 

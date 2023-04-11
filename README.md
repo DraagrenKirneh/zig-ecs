@@ -15,9 +15,8 @@ test "example" {
         stuff: void,
     };
 
-    const GlobalState = void;
     const Entities = ecs.Entities(Components);
-    const Context = ecs.Context(GlobalState, Entities);
+    const Context = ecs.Context(Entities);
 
     const MoveSystem = struct {
         position: *ecs.math.Vec2f,
