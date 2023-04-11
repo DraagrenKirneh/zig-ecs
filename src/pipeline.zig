@@ -42,6 +42,19 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
                     while (iter.next()) |value| {
                         try @call(.auto, field, .{ value, self.context });
                     }
+                } else if (argCount == 3) {
+                    var iter = self.context.getIterator(system);
+                    const field_type = @TypeOf(field);
+                    const type_info = @typeInfo(field_type);
+                    const paramT = type_info.Fn.params[2].type.?;
+                    var params: paramT = undefined;
+                    inline for (std.meta.fields(paramT)) |p_field| {
+                        const sub_type = @typeInfo(p_field.type).Pointer.child;
+                        @field(params, p_field.name) = self.context.getResource(sub_type);
+                    }
+                    while (iter.next()) |value| {
+                        try @call(.auto, field, .{ value, self.context, params });
+                    }
                 }
                 if (defferment == .always) {
                     try self.context.submitCommands();
