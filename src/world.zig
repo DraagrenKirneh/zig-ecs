@@ -155,9 +155,17 @@ test "singletons" {
     const CounterSystem = struct {
         const Self = @This();
 
+        const Globals = struct { cnt: *CounterSingleton };
+
         pub fn update(context: *Context) !void {
             const ptr = context.resources.get(CounterSingleton);
             ptr.value += 1;
+        }
+
+        pub fn step(self: Self, context: *Context, g: Globals) !void {
+            _ = self;
+            _ = context;
+            g.cnt.value += 1;
         }
 
         pub fn print(context: *Context) !void {
@@ -187,6 +195,8 @@ test "singletons" {
     var pipe: MyWorld.Pipeline = try world.createPipeline();
     try pipe.run(.print);
     try pipe.run(.update);
+    try pipe.run(.print);
+    try pipe.run(.step);
     try pipe.run(.print);
 
     try world.shutdown(&.{CounterRegistration});

@@ -144,7 +144,7 @@ pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const 
         const decls = getDeclsFn(each);
         inline for (decls) |dcl| {
             const fn_info = dcl.func;
-            if (fn_info.params.len == 2) {
+            if (fn_info.params.len == 2 or fn_info.params.len == 3) {
                 const argt_0 = fn_info.params[0].type;
                 const argt_1 = fn_info.params[1].type;
                 if (argt_0 == each and argt_1 == *T) {
