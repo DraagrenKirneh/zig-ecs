@@ -1,5 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
+const Allocator = std.mem.Allocator;
 
 const TypeId = enum(usize) { _ };
 
@@ -45,6 +46,29 @@ pub fn FixedCache(comptime types: []const type) type {
         }
     };
 }
+
+pub const ResourceCache = struct {
+    const Map = std.AutoArrayHashMapUnmanaged(TypeId, usize);
+    map: Map = .{},
+
+    const Self = @This();
+
+    pub fn get(self: *const Self, comptime T: type) *T {
+        return self.getOptional(T).?;
+    }
+
+    pub fn getOptional(self: *const Self, comptime T: type) ?*T {
+        var data = self.map.get(typeId(T));
+        if (data) |bytes| {
+            return @intToPtr(*T, bytes);
+        }
+        return null;
+    }
+
+    pub fn put(self: *Self, allocator: Allocator, comptime T: type, ptr: *T) !void {
+        try self.map.put(allocator, typeId(T), @ptrToInt(ptr));
+    }
+};
 
 pub const PointerCache = struct {
     const Map = std.AutoHashMap(TypeId, usize);

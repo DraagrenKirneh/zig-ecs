@@ -76,7 +76,7 @@ test "Pipeline" {
     };
 
     const MyEntities = ecs.Entities(Game);
-    const MyContext = ecs.Context(void, MyEntities);
+    const MyContext = ecs.Context(MyEntities);
 
     const Entry = struct {
         rotation: u32,
@@ -107,8 +107,8 @@ test "Pipeline" {
     try entities.setComponent(e, .rotation, 42);
 
     //var state: i32 = 43;,
-    var cache = Cache.init(allocator);
-    var ctx = MyContext.init(allocator, cache, {}, &entities);
+    var cache = ecs.Resources.init(allocator);
+    var ctx = MyContext.init(allocator, &cache.cache, &entities);
     const Pipe = Pipeline(MyContext, &.{RotationSystem});
 
     var pipeline = Pipe.init(&ctx);
@@ -132,7 +132,7 @@ test "deferment" {
     };
 
     const MyEntities = ecs.Entities(Components);
-    const MyContext = ecs.Context(void, MyEntities);
+    const MyContext = ecs.Context(MyEntities);
 
     const RemoveDeadSystem = struct {
         id: ecs.EntityID,
@@ -170,8 +170,12 @@ test "deferment" {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
-    var cache = Cache.init(allocator);
-    var ctx = MyContext.init(arena.allocator(), cache, {}, &entities);
+    var resources = ecs.Resources.init(allocator);
+    var ctx = MyContext.init(
+        arena.allocator(),
+        &resources.cache,
+        &entities,
+    );
     const Pipe = Pipeline(MyContext, &.{
         StepCounterSystem,
         RemoveDeadSystem,
