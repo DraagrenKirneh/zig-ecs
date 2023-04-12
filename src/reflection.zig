@@ -137,27 +137,76 @@ pub fn ToEnumFromMethods(comptime T: type, comptime types: []const type) type {
     return ToEnumFromNames(names);
 }
 
+const SystemArgumentType = enum {
+    invalid,
+
+    self,
+    context,
+    resources,
+
+    self_context,
+    self_resources,
+    context_resources,
+
+    self_context_resources,
+};
+
+pub fn isValidResourceRef(comptime resourceRef: ?type) bool {
+    if (resourceRef == null) return false;
+    const container_type = resourceRef.?;
+    const type_info = @typeInfo(container_type);
+    if (type_info != .Struct) return false;
+    if (type_info.Struct.decls.len > 0) return false;
+    inline for (std.meta.fields(container_type)) |field| {
+        const field_info = @typeInfo(field.type);
+        if (field_info != .Pointer) return false;
+    }
+    return true;
+}
+
+pub fn argumentType(
+    comptime Context: type,
+    comptime system: type,
+    comptime fn_field: std.builtin.Type.Fn,
+) SystemArgumentType {
+    //if (type_info != .Fn) return .invalid;
+    const len = fn_field.params.len;
+    if (len == 0 or len >= 4) return .invalid;
+
+    const first_param = fn_field.params[0].type;
+    if (len == 1) {
+        if (first_param == system) return .self;
+        if (first_param == *Context) return .context;
+        if (isValidResourceRef(first_param)) return .resources;
+        //fixme
+        return .invalid;
+    }
+    const second_param = fn_field.params[1].type;
+    if (len == 2) {
+        if (first_param == system) {
+            if (second_param == *Context) return .self_context;
+            if (isValidResourceRef(second_param)) return .context_resources;
+        } else if (first_param == *Context) {
+            if (isValidResourceRef(second_param)) return .context_resources;
+        }
+        return .invalid;
+    }
+    //const third_param = type_info.Fn.params[2].type.?;
+    if (first_param != system) return .invalid;
+    if (second_param != *Context) return .invalid;
+    if (isValidResourceRef(second_param)) return .self_context_resources;
+    return .invalid;
+}
+
 // specialized for pipeline
 pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const []const u8 {
     comptime var names: []const []const u8 = &[_][]const u8{};
     inline for (types) |each| {
         const decls = getDeclsFn(each);
         inline for (decls) |dcl| {
-            const fn_info = dcl.func;
-            if (fn_info.params.len == 2 or fn_info.params.len == 3) {
-                const argt_0 = fn_info.params[0].type;
-                const argt_1 = fn_info.params[1].type;
-                if (argt_0 == each and argt_1 == *T) {
-                    if (!contains(names, dcl.name)) {
-                        names = names ++ &[_][]const u8{dcl.name};
-                    }
-                }
-            } else if (fn_info.params.len == 1) {
-                const argt_0 = fn_info.params[0].type;
-                if (argt_0 == *T) {
-                    if (!contains(names, dcl.name)) {
-                        names = names ++ &[_][]const u8{dcl.name};
-                    }
+            if (argumentType(T, each, dcl.func) != .invalid) {
+                if (!contains(names, dcl.name)) {
+                    names = names ++ &[_][]const u8{dcl.name};
                 }
             }
         }
