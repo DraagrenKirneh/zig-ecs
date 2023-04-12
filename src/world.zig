@@ -185,4 +185,6 @@ test "singletons" {
     try pipe.run(.print);
     try pipe.run(.step);
     try pipe.run(.print);
+
+    //try world.shutdown(&.{CounterRegistration});
 }
