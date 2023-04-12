@@ -151,6 +151,19 @@ const SystemArgumentType = enum {
     self_context_resources,
 };
 
+pub fn isValidResourceRef(comptime resourceRef: ?type) bool {
+    if (resourceRef == null) return false;
+    const container_type = resourceRef.?;
+    const type_info = @typeInfo(container_type);
+    if (type_info != .Struct) return false;
+    if (type_info.Struct.decls.len > 0) return false;
+    inline for (std.meta.fields(container_type)) |field| {
+        const field_info = @typeInfo(field.type);
+        if (field_info != .Pointer) return false;
+    }
+    return true;
+}
+
 pub fn argumentType(
     comptime Context: type,
     comptime system: type,
@@ -164,24 +177,25 @@ pub fn argumentType(
     if (len == 1) {
         if (first_param == system) return .self;
         if (first_param == *Context) return .context;
+        if (isValidResourceRef(first_param)) return .resources;
         //fixme
-        return .resources;
+        return .invalid;
     }
     const second_param = fn_field.params[1].type;
     if (len == 2) {
         if (first_param == system) {
             if (second_param == *Context) return .self_context;
-            return .context_resources;
-        }
-        if (first_param == *Context) {
-            return .context_resources;
+            if (isValidResourceRef(second_param)) return .context_resources;
+        } else if (first_param == *Context) {
+            if (isValidResourceRef(second_param)) return .context_resources;
         }
         return .invalid;
     }
     //const third_param = type_info.Fn.params[2].type.?;
     if (first_param != system) return .invalid;
     if (second_param != *Context) return .invalid;
-    return .self_context_resources;
+    if (isValidResourceRef(second_param)) return .self_context_resources;
+    return .invalid;
 }
 
 // specialized for pipeline
