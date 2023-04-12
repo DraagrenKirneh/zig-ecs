@@ -162,9 +162,7 @@ test "singletons" {
             ptr.value += 1;
         }
 
-        pub fn step(self: Self, context: *Context, g: Globals) !void {
-            _ = self;
-            _ = context;
+        pub fn step(g: Globals) !void {
             g.cnt.value += 1;
         }
 
@@ -179,18 +177,7 @@ test "singletons" {
     var world: MyWorld = try MyWorld.init(allocator);
     defer world.deinit();
 
-    const CounterRegistration = struct {
-        pub fn startup(w: *MyWorld) !void {
-            try w.createResource(CounterSingleton, .{ .value = 10 });
-        }
-
-        pub fn shutdown(w: *MyWorld) void {
-            _ = w;
-            //w.singletons.destroy(CounterSingleton);
-        }
-    };
-
-    try world.startup(&.{CounterRegistration});
+    try world.createResource(CounterSingleton, .{ .value = 10 });
 
     var pipe: MyWorld.Pipeline = try world.createPipeline();
     try pipe.run(.print);
@@ -198,6 +185,4 @@ test "singletons" {
     try pipe.run(.print);
     try pipe.run(.step);
     try pipe.run(.print);
-
-    try world.shutdown(&.{CounterRegistration});
 }

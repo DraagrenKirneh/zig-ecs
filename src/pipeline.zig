@@ -16,6 +16,11 @@ const DeferOption = enum {
     skip,
 };
 
+pub fn ResourceContainer(comptime types: []const type) type {
+    _ = types;
+    return struct {};
+}
+
 pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
     return struct {
         context: *Context,
@@ -27,35 +32,89 @@ pub fn Pipeline(comptime Context: type, comptime systems: []const type) type {
             return .{ .context = context };
         }
 
+        fn fillResourceArg(self: *const Self, comptime T: type) T {
+            var params: T = undefined;
+            inline for (std.meta.fields(T)) |p_field| {
+                const sub_type = @typeInfo(p_field.type).Pointer.child;
+                @field(params, p_field.name) = self.context.getResource(sub_type);
+            }
+            return params;
+        }
+
         pub fn runWithDefferment(self: *Self, comptime tag: Operation, comptime defferment: DeferOption) !void {
             const declName = @tagName(tag);
             inline for (systems) |system| {
                 // @NOTE may want to have an option to submit commands per system that is run.
                 if (!@hasDecl(system, declName)) continue;
+
                 const field = @field(system, declName);
-                const argCount = functionArgCount(field);
-                if (argCount == 1) {
-                    // @Maybe context or value depending on param?
-                    try @call(.auto, field, .{self.context});
-                } else if (argCount == 2) {
-                    var iter = self.context.getIterator(system);
-                    while (iter.next()) |value| {
-                        try @call(.auto, field, .{ value, self.context });
-                    }
-                } else if (argCount == 3) {
-                    var iter = self.context.getIterator(system);
-                    const field_type = @TypeOf(field);
-                    const type_info = @typeInfo(field_type);
-                    const paramT = type_info.Fn.params[2].type.?;
-                    var params: paramT = undefined;
-                    inline for (std.meta.fields(paramT)) |p_field| {
-                        const sub_type = @typeInfo(p_field.type).Pointer.child;
-                        @field(params, p_field.name) = self.context.getResource(sub_type);
-                    }
-                    while (iter.next()) |value| {
-                        try @call(.auto, field, .{ value, self.context, params });
-                    }
+                const field_type = @TypeOf(field);
+                const type_info = @typeInfo(field_type);
+                if (type_info != .Fn) continue;
+                const fn_field = type_info.Fn;
+                const argType = comptime reflection.argumentType(Context, system, fn_field);
+                switch (argType) {
+                    .self => {
+                        var iter = self.context.getIterator(system);
+                        while (iter.next()) |value| {
+                            try @call(.auto, field, .{value});
+                        }
+                    },
+                    .context => {
+                        try @call(.auto, field, .{self.context});
+                    },
+                    .resources => {
+                        const arg = self.fillResourceArg(type_info.Fn.params[0].type.?);
+                        try @call(.auto, field, .{arg});
+                    },
+                    .self_context => {
+                        var iter = self.context.getIterator(system);
+                        while (iter.next()) |value| {
+                            try @call(.auto, field, .{ value, self.context });
+                        }
+                    },
+                    .self_resources => {
+                        const arg = self.fillResourceArg(type_info.Fn.params[1].type.?);
+                        var iter = self.context.getIterator(system);
+                        while (iter.next()) |value| {
+                            try @call(.auto, field, .{ value, arg });
+                        }
+                    },
+                    .context_resources => {
+                        const arg = self.fillResourceArg(type_info.Fn.params[1].type.?);
+                        try @call(.auto, field, .{ self.context, arg });
+                    },
+                    .self_context_resources => {
+                        const arg = self.fillResourceArg(type_info.Fn.params[2].type.?);
+                        var iter = self.context.getIterator(system);
+                        while (iter.next()) |value| {
+                            try @call(.auto, field, .{ value, self.context, arg });
+                        }
+                    },
+                    .invalid => unreachable,
                 }
+                // if (argCount == 1) {
+                //     // @Maybe context or value depending on param?
+                //     try @call(.auto, field, .{self.context});
+                // } else if (argCount == 2) {
+                //     var iter = self.context.getIterator(system);
+                //     while (iter.next()) |value| {
+                //         try @call(.auto, field, .{ value, self.context });
+                //     }
+                // } else if (argCount == 3) {
+                //     var iter = self.context.getIterator(system);
+                //     const field_type = @TypeOf(field);
+                //     const type_info = @typeInfo(field_type);
+                //     const paramT = type_info.Fn.params[2].type.?;
+                //     var params: paramT = undefined;
+                //     inline for (std.meta.fields(paramT)) |p_field| {
+                //         const sub_type = @typeInfo(p_field.type).Pointer.child;
+                //         @field(params, p_field.name) = self.context.getResource(sub_type);
+                //     }
+                //     while (iter.next()) |value| {
+                //         try @call(.auto, field, .{ value, self.context, params });
+                //     }
+                // }
                 if (defferment == .always) {
                     try self.context.submitCommands();
                 }

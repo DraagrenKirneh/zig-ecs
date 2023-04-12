@@ -137,27 +137,62 @@ pub fn ToEnumFromMethods(comptime T: type, comptime types: []const type) type {
     return ToEnumFromNames(names);
 }
 
+const SystemArgumentType = enum {
+    invalid,
+
+    self,
+    context,
+    resources,
+
+    self_context,
+    self_resources,
+    context_resources,
+
+    self_context_resources,
+};
+
+pub fn argumentType(
+    comptime Context: type,
+    comptime system: type,
+    comptime fn_field: std.builtin.Type.Fn,
+) SystemArgumentType {
+    //if (type_info != .Fn) return .invalid;
+    const len = fn_field.params.len;
+    if (len == 0 or len >= 4) return .invalid;
+
+    const first_param = fn_field.params[0].type;
+    if (len == 1) {
+        if (first_param == system) return .self;
+        if (first_param == *Context) return .context;
+        //fixme
+        return .resources;
+    }
+    const second_param = fn_field.params[1].type;
+    if (len == 2) {
+        if (first_param == system) {
+            if (second_param == *Context) return .self_context;
+            return .context_resources;
+        }
+        if (first_param == *Context) {
+            return .context_resources;
+        }
+        return .invalid;
+    }
+    //const third_param = type_info.Fn.params[2].type.?;
+    if (first_param != system) return .invalid;
+    if (second_param != *Context) return .invalid;
+    return .self_context_resources;
+}
+
 // specialized for pipeline
 pub fn getDeclEnumNames(comptime T: type, comptime types: []const type) []const []const u8 {
     comptime var names: []const []const u8 = &[_][]const u8{};
     inline for (types) |each| {
         const decls = getDeclsFn(each);
         inline for (decls) |dcl| {
-            const fn_info = dcl.func;
-            if (fn_info.params.len == 2 or fn_info.params.len == 3) {
-                const argt_0 = fn_info.params[0].type;
-                const argt_1 = fn_info.params[1].type;
-                if (argt_0 == each and argt_1 == *T) {
-                    if (!contains(names, dcl.name)) {
-                        names = names ++ &[_][]const u8{dcl.name};
-                    }
-                }
-            } else if (fn_info.params.len == 1) {
-                const argt_0 = fn_info.params[0].type;
-                if (argt_0 == *T) {
-                    if (!contains(names, dcl.name)) {
-                        names = names ++ &[_][]const u8{dcl.name};
-                    }
+            if (argumentType(T, each, dcl.func) != .invalid) {
+                if (!contains(names, dcl.name)) {
+                    names = names ++ &[_][]const u8{dcl.name};
                 }
             }
         }
