@@ -24,8 +24,7 @@ test "example" {
 
         const Self = @This();
 
-        pub fn update(self: Self, context: *Context) !void {
-            _ = context;
+        pub fn update(self: Self) !void {
             self.position.* = self.position.add(self.velocity);
         }
     };
