@@ -185,7 +185,7 @@ pub fn argumentType(
     if (len == 2) {
         if (first_param == system) {
             if (second_param == *Context) return .self_context;
-            if (isValidResourceRef(second_param)) return .context_resources;
+            if (isValidResourceRef(second_param)) return .self_resources;
         } else if (first_param == *Context) {
             if (isValidResourceRef(second_param)) return .context_resources;
         }
