@@ -1,6 +1,4 @@
-# Experimental Entity Component System for Zig
-
-Experimental derivation/fork of https://github.com/hexops/mach/tree/main/libs/ecs .
+# Entity Component System written in Zig
 
 ## Examples
 
@@ -117,3 +115,6 @@ test "Pairs" {
     try std.testing.expect(it.next() == null);
 }
 ```
+
+# Attribution
+The Entity Archetypestorage is based on https://github.com/hexops/mach/tree/main/libs/ecs.
