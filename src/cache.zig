@@ -46,6 +46,24 @@ pub fn FixedCache(comptime types: []const type) type {
     };
 }
 
+pub const Cache = struct {
+    const Map = std.AutoHashMap(TypeId, usize);
+    map: Map,
+
+    const Self = @This();
+    pub fn init(allocator: std.mem.Allocator) Self {
+        return .{ .map = Map.init(allocator) };
+    }
+
+    pub fn get(self: *const Self, comptime Key: type, comptime T: type) ?*T {
+        var data = self.map.get(typeIdValue(Key));
+        if (data) |bytes| {
+            return @intToPtr(*T, bytes);
+        }
+        return null;
+    }
+};
+
 pub const PointerCache = struct {
     const Map = std.AutoHashMap(TypeId, usize);
     map: Map,

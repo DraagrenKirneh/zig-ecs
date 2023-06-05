@@ -20,3 +20,9 @@ pub const math = @import("math/math.zig");
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+test "has reuse port" {
+    const os = @import("std").os;
+    const res = @hasDecl(os.SO, "REUSEADDR");
+    try @import("std").testing.expect(res);
+}

@@ -16,6 +16,43 @@ const ArchetypeId = u64;
 
 const Column = @import("storage.zig").Column;
 
+const Vec2i = [2]i32;
+const FieldTag = enum {
+    x,
+    y,
+    w,
+    h,
+
+    pub inline fn index(tag: @This()) u1 {
+        return comptime switch (tag) {
+            .x, .w => 0,
+            .y, .h => 1,
+        };
+    }
+};
+
+inline fn fieldIndex(comptime tag: FieldTag) u1 {
+    return comptime switch (tag) {
+        .x, .w => 0,
+        .y, .h => 1,
+    };
+}
+inline fn getField(vec: Vec2i, comptime tag: FieldTag) i32 {
+    return vec[fieldIndex(tag)];
+}
+
+test "field" {
+    const v = Vec2i{ 10, 20 };
+
+    const x: FieldTag = .x;
+    try testing.expect(v[x.index()] == 10);
+
+    try std.testing.expect(getField(v, .x) == 10);
+    try std.testing.expect(getField(v, .w) == 10);
+    try std.testing.expect(getField(v, .y) == 20);
+    try std.testing.expect(getField(v, .h) == 20);
+}
+
 fn copyStructToStruct(comptime Output: type, comptime Input: type, input: Input) Output {
     var output: Output = undefined;
     output.id = 0;

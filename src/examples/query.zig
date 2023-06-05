@@ -96,3 +96,36 @@ test "test spatial query" {
     var pipeline2 = try world.createPipeline();
     try pipeline2.run(.step);
 }
+
+const Op = enum(u2) {
+    mix,
+    shift,
+    mul,
+
+    inline fn do(comptime op: Op, data: *Data, value: usize) {
+        return @call(.auto, @field(Data, @tagName(op)), if (op == .mix) .{value} else .{});
+    }
+};
+
+inline fn eval(comptime ops: []const Op, data: *Data, value: usize) void {
+   ;
+}
+
+const Algorithm = enum {
+    a,
+    b,
+
+    inline fn operations(comptime self: Algorithm) []const Op {
+        return switch (self) { 
+            .a => .{ .mix, .shift, .mul },
+            .b => .{ .shift, .mix, .mul },
+        };
+    }
+
+    fn eval(self: Algorithm, data: *Data, value: usize) void {
+        inline for (std.meta.tags(Algorithm)) | tag | {
+            if (tag == self) {
+                inline for (tag.toperations()) |op| op.do(data, value);
+        }
+    }
+};
